@@ -212,21 +212,53 @@ function dealEndsOn(listing) {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** "Available 1 – 20 Oct", or nothing when the owner has not said. */
+/*
+ * The window during which the property can actually be booked, in words.
+ *
+ * These dates are recorded once by the owner and then left alone, so by the time
+ * anybody reads the page most of them are in the past - and printing them as
+ * stored tells a reader something untrue in both directions. "Available from 25
+ * Sept", read in October, says you cannot arrive before a day that has already
+ * gone, which reads as a stale listing rather than as a house that is ready now.
+ * And a window that has closed in full keeps advertising dates nobody can use.
+ *
+ * So the window is read against today rather than echoed. A start that has passed
+ * is no longer a constraint and is dropped; a window with no end is simply open;
+ * a window that has ended says nothing at all. The year is printed only where a
+ * date falls outside the current one, because "until 15 Jan" means a different
+ * thing each time January comes round.
+ */
 function availabilityWindow(listing) {
   const from = listing.availableFrom;
   const to = listing.availableTo;
   if (!from && !to) return '';
-  const day = 86400000;
-  const fmt = (value) =>
-    new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  // A month or so is two different months, so the year only helps when it spans.
-  if (from && to) {
-    const showYear = new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`) > day * 45;
-    const suffix = showYear ? ` ${new Date(`${to}T00:00:00`).getFullYear()}` : '';
-    return `Available ${fmt(from)} – ${fmt(to)}${suffix}`;
+
+  const parse = (value) => new Date(`${value}T00:00:00`);
+  // Midnight today, so the comparison is between whole days and does not depend
+  // on what time of day the page happened to be opened.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // A closed window is not an availability statement. Printed as stored it would
+  // keep claiming availability for a date nobody can arrive in, so it is dropped
+  // entirely rather than corrected - the rates above it are still true.
+  if (to && parse(to) < today) return '';
+
+  const fmt = (value) => {
+    const date = parse(value);
+    const opts = { day: 'numeric', month: 'short' };
+    // Only the current year stays implicit. Any other year is named, so a date
+    // months out is not read as the nearer one that has already passed.
+    if (date.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+    return date.toLocaleDateString('en-GB', opts);
+  };
+
+  const startsLater = from && parse(from) > today;
+  if (!startsLater) {
+    return to ? `Available until ${fmt(to)}` : 'Available now';
   }
-  return from ? `Available from ${fmt(from)}` : `Available until ${fmt(to)}`;
+
+  return to ? `Available ${fmt(from)} – ${fmt(to)}` : `Available from ${fmt(from)}`;
 }
 
 /*
@@ -508,15 +540,25 @@ const formatCompact = (amount) => compactFormatter(effectiveCurrency()).format(c
  */
 function paintPrices(scope = document) {
   const code = effectiveCurrency();
+  /* The separator goes between a number and a word, and between a number and a
+     mark that stands on its own - but not between a number and a comma, which
+     belongs to the number it follows. Several callers pass exactly that:
+     the deposit's ", refundable" and the headline's "· listed ...", and a blind
+     space turned the first into "EUR 29 , refundable", a price nobody has ever
+     paid. A prefix or suffix that already opens with its own space is left to
+     supply its own, so "save " and " / week" do not gain a second one. */
+  const attaches = /^[,.;:)\]}]/;
+  const lead = (value) => (/^\s/.test(value) || attaches.test(value) ? '' : ' ');
+
   $$('[data-price]', scope).forEach((element) => {
     const amount = Number(element.dataset.price) || 0;
     const formatter = element.hasAttribute('data-price-compact') ? compactFormatter(code) : moneyFormatter(code);
     const prefix = element.dataset.pricePrefix;
     const suffix = element.dataset.priceSuffix;
     element.innerHTML =
-      (prefix ? `${escapeHtml(prefix)} ` : '')
+      (prefix ? `${escapeHtml(prefix)}${lead(prefix)}` : '')
       + formatter.format(convert(amount, code))
-      + (suffix ? ` <small>${escapeHtml(suffix)}</small>` : '');
+      + (suffix ? `${lead(suffix)}<small>${escapeHtml(suffix)}</small>` : '');
   });
 }
 
