@@ -239,6 +239,24 @@ function buildBody(listing, currency) {
       ['Listed on', listed(listing.listed)]
     ];
 
+  /*
+   * The Listing Truth rows, in the same class names app.js renders.
+   *
+   * This is the one new thing the pre-rendered half really has to carry. The
+   * claim the page is making - when it was last checked, by whom, and how
+   * complete it is - is the claim a crawler weighs and a link preview shows, and
+   * leaving it to JavaScript would mean the served HTML says nothing about it.
+   *
+   * Deliberately only the factual rows. The valuation, the promotion breakdown
+   * and the viewing desk are all interactive or opinion, and none of them belongs
+   * in a static shell.
+   */
+  const truthRows = listing.truth ? [
+    ['Last confirmed', listing.truth.confirmedOn ? listed(listing.truth.confirmedOn) : 'Not confirmed on record'],
+    ['Information source', listing.truth.source || 'Not recorded'],
+    ['Verification scope', (listing.truth.scope || []).join(' · ') || 'Nothing checked on record']
+  ] : [];
+
   return `
     <nav class="breadcrumbs" aria-label="Breadcrumb">
       <a href="../index.html">Home</a>
@@ -262,6 +280,15 @@ function buildBody(listing, currency) {
         <dl class="spec-grid">
           ${specs.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('\n          ')}
         </dl>
+        ${truthRows.length ? `
+        <section class="detail-section truth-panel">
+          <p class="eyebrow">Listing truth</p>
+          <h2 id="truth-title">What we know, and how we know it</h2>
+          <dl class="truth-rows">
+            ${truthRows.map(([label, value]) => `
+              <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
+          </dl>
+        </section>` : ''}
         <section class="detail-section">
           <h2>${isLand(listing) ? 'About this plot' : 'About this home'}</h2>
           <p class="prose prose--spaced">${escapeHtml(listing.description)}</p>

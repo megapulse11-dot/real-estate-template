@@ -672,9 +672,9 @@ input[name="botcheck"] { position: absolute; left: -9999px; width: 1px; height: 
    a surface-coloured container, NOT by the old `gap: 1px` + grey background
    trick. That trick paints the whole unfilled remainder of the last row grey,
    which reads as an empty card rather than as space - visible on any grid whose
-   item count is not a multiple of its column count. Shadows clip against
-   `overflow: hidden`, so the outermost ones are cut by the container's own border
-   and no edge doubles. */
+   item count is not a multiple of its column count (the terms panel has five
+   fields in three columns). Shadows clip against `overflow: hidden`, so the
+   outermost ones are cut by the container's own border and no edge doubles. */
 .spec-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 30px 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .spec-grid > div { display: flex; flex-direction: column; gap: 5px; padding: 20px 18px; background: var(--surface); box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
 .spec-grid dt { color: var(--muted); font-size: clamp(13px, .95vw, 14px); }
@@ -695,6 +695,138 @@ input[name="botcheck"] { position: absolute; left: -9999px; width: 1px; height: 
 .agent-meta a:hover { color: var(--brand); }
 .agent-meta .icon { color: var(--muted); }
 .not-found { padding: 90px 24px; text-align: center; }
+
+/* ---- listing truth ---------------------------------------------------------
+   The freshness line on a card, and the panel that backs it up on the detail
+   page. The colour is doing real work: a confirmation that is eight weeks old
+   has to look different from one made this morning, or the whole feature is
+   just words. */
+.card-truth { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12.5px; font-weight: 500; }
+.card-truth .icon { flex: none; }
+.card-truth--fresh { color: var(--brand); }
+.card-truth--aging { color: var(--accent-ink); }
+.card-truth--old, .card-truth--none { color: var(--danger); }
+/* The score is separated from the sentence by a hairline rather than a bullet:
+   it is a different kind of statement, and running them together reads as one
+   vague claim. */
+.card-truth-score { margin-left: auto; padding-left: 10px; border-left: 1px solid var(--line); color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+.truth-panel { padding: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.truth-stamp { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 650; white-space: nowrap; }
+.truth-stamp--fresh { color: var(--brand); background: var(--brand-soft); }
+.truth-stamp--aging { color: var(--accent-ink); background: var(--accent-soft); }
+.truth-stamp--old, .truth-stamp--none { color: var(--danger); background: var(--danger-soft); }
+
+/* A definition list rather than a grid of boxes: these are long sentences, and a
+   fixed column would either clip them or waste half the width on the label. */
+.truth-rows { display: grid; gap: 0; margin: 22px 0 0; }
+.truth-rows > div { display: grid; grid-template-columns: 190px 1fr; gap: 16px; padding: 13px 0; border-top: 1px solid var(--line); }
+.truth-rows dt { color: var(--muted); font-size: 13.5px; font-weight: 600; }
+.truth-rows dd { margin: 0; font-size: 14.5px; line-height: 1.55; }
+.truth-gap { display: flex; align-items: flex-start; gap: 9px; margin: 18px 0 0; padding: 13px 15px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--accent-ink); background: var(--accent-soft); font-size: 13.5px; line-height: 1.55; }
+.truth-gap .icon { flex: none; margin-top: 2px; }
+.truth-foot { display: flex; align-items: center; gap: 16px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.truth-foot-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+/* ---- valuation -------------------------------------------------------------
+   The range is the headline and the reasoning sits under it. Colour is used
+   only for the confidence chip, so the eye lands on the number first. */
+.valuation-range { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin: 16px 0 0; font-size: clamp(22px, 2.6vw, 29px); font-weight: 700; letter-spacing: -.8px; }
+.valuation-dash { color: var(--muted); font-size: 15px; font-weight: 500; letter-spacing: 0; }
+.valuation-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; color: var(--muted); font-size: 13.5px; }
+.valuation-confidence { padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .3px; }
+.valuation-confidence--high { color: var(--brand); background: var(--brand-soft); }
+.valuation-confidence--medium { color: var(--accent-ink); background: var(--accent-soft); }
+.valuation-confidence--low { color: var(--danger); background: var(--danger-soft); }
+.valuation-block { margin-top: 26px; }
+.valuation-block h3 { font-size: 14px; font-weight: 650; }
+.valuation-list { display: grid; gap: 9px; margin: 12px 0 0; padding: 0; list-style: none; }
+.valuation-list li { display: flex; align-items: flex-start; gap: 10px; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+.valuation-list .icon { flex: none; margin-top: 3px; color: var(--brand); }
+.valuation-list--assumes .icon { color: var(--muted); }
+/* The disclaimer is the most important sentence in the panel, so it is boxed and
+   not styled as a footnote. "Not a formal appraisal" buried in small print is
+   exactly the kind of claim this feature exists to stop. */
+.valuation-disclaimer { display: flex; align-items: flex-start; gap: 10px; margin: 26px 0 18px; padding: 15px 17px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--muted-strong); background: var(--surface-subtle); font-size: 13.5px; line-height: 1.6; }
+.valuation-disclaimer .icon { flex: none; margin-top: 2px; color: var(--muted); }
+
+/* ---- tenancy --------------------------------------------------------------- */
+.tenancy .spec-grid { grid-template-columns: repeat(3, 1fr); }
+.tenancy-note { display: flex; align-items: flex-start; gap: 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.tenancy-note .icon { flex: none; margin-top: 2px; }
+
+/* ---- promotion transparency ------------------------------------------------ */
+.promotion-note { padding: 16px 18px; margin-bottom: 20px; border: 1px solid color-mix(in srgb, var(--hot) 28%, var(--line)); border-radius: var(--radius); background: var(--hot-soft); }
+.promotion-note p { display: flex; align-items: flex-start; gap: 10px; margin: 0; font-size: 13.5px; line-height: 1.55; }
+.promotion-note .icon { flex: none; margin-top: 2px; }
+.promotion-reason { color: var(--ink-soft); }
+.promotion-reason .icon { color: var(--hot); }
+/* The exclusions are the line that stops the promotion being read as a bigger
+   discount than it is, so they get the stronger weight. */
+.promotion-excludes { margin-top: 9px !important; padding-top: 9px; border-top: 1px solid color-mix(in srgb, var(--hot) 22%, transparent); color: var(--accent-ink); font-weight: 500; }
+
+/* ---- honest ranking -------------------------------------------------------- */
+.sort-explain { display: flex; align-items: flex-start; gap: 9px; margin: 16px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.sort-explain .icon { flex: none; margin-top: 2px; color: var(--brand); }
+.sort-explain strong { color: var(--ink-soft); font-weight: 650; }
+/* Paid placement. Deliberately quiet and obviously a disclosure rather than a
+   badge of honour - it must not read as a second "verified". */
+.badge--sponsored { color: var(--muted-strong); background: var(--badge-float); border: 1px solid var(--line-strong); letter-spacing: .3px; }
+.badge--reduced { color: var(--brand); background: var(--brand-soft); }
+/* The disclosure on the listing's own page. Quiet on purpose - it is a legal
+   note, and styling it like a promotion would be the exact confusion it exists
+   to prevent. */
+.placement-note { display: flex; align-items: baseline; gap: 12px; margin: 0 0 20px; padding: 11px 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: 13px; line-height: 1.55; }
+.placement-note .badge { flex: none; }
+
+/* ---- viewing desk ---------------------------------------------------------- */
+.desk-assurance { display: flex; align-items: flex-start; gap: 9px; margin: 16px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.desk-assurance .icon { flex: none; margin-top: 2px; color: var(--brand); }
+.desk-assurance a { color: var(--brand); font-weight: 600; }
+.desk-recipient { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding: 13px 15px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-subtle); }
+.desk-recipient-name { margin: 0; font-size: 14px; font-weight: 650; }
+.desk-recipient-role { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+
+.desk-slots { margin-top: 22px; padding: 0; border: 0; }
+.desk-slots legend { padding: 0 0 12px; font-size: 14px; font-weight: 650; }
+.desk-slots legend small { color: var(--muted); font-weight: 400; }
+.slot-days { display: grid; gap: 10px; max-height: 232px; overflow-y: auto; padding: 2px; }
+.slot-day { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.slot-day-label { margin: 0; color: var(--ink-soft); font-size: 13px; font-weight: 650; }
+.slot-times { display: flex; flex-wrap: wrap; gap: 6px; }
+.slot { position: relative; display: inline-flex; }
+/* The checkbox itself is hidden but not removed - it keeps the field focusable
+   and keeps native form semantics, so the browser's own keyboard order and
+   assistive handling still work. */
+.slot input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.slot span { padding: 6px 11px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--muted-strong); background: var(--surface); font-size: 12.5px; font-weight: 500; transition: border-color .15s, color .15s, background .15s; }
+.slot:hover span { border-color: var(--brand); color: var(--brand); }
+.slot input:checked + span { border-color: var(--brand); color: var(--on-solid); background: var(--brand); }
+/* The focus ring is drawn on the label, because the element that actually took
+   focus is the invisible input. Suppressing it here would make this unusable by
+   keyboard. */
+.slot input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
+.slot-error { margin: 10px 0 0; color: var(--danger); font-size: 13px; line-height: 1.5; }
+
+.desk-receipt .receipt-ref { margin: 20px 0 0; padding: 13px 15px; border-radius: var(--radius-sm); background: var(--brand-soft); font-size: 14px; }
+.receipt-steps { margin: 20px 0 0; padding: 0; list-style: none; counter-reset: step; }
+.receipt-steps li { position: relative; padding: 0 0 16px 30px; font-size: 13.5px; line-height: 1.5; }
+.receipt-steps li::before { counter-increment: step; content: counter(step); position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 21px; height: 21px; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--muted); font-size: 11px; font-weight: 700; }
+.receipt-steps li.is-done::before { border-color: var(--brand); color: var(--on-solid); background: var(--brand); }
+.receipt-steps strong { display: block; font-size: 13.5px; font-weight: 650; }
+.receipt-steps span { color: var(--muted-strong); }
+.receipt-escalate { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0 0; padding: 13px 15px; border-radius: var(--radius-sm); color: var(--muted-strong); background: var(--surface-subtle); font-size: 13px; line-height: 1.55; }
+.receipt-escalate .icon { flex: none; margin-top: 2px; color: var(--accent-ink); }
+.receipt-escalate a { color: var(--brand); font-weight: 600; }
+.receipt-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 0; }
+.report-intro { margin: 18px 0 0; color: var(--muted-strong); font-size: 13.5px; line-height: 1.6; }
+
+@media (max-width: 640px) {
+  .truth-rows > div { grid-template-columns: 1fr; gap: 3px; }
+  .tenancy .spec-grid { grid-template-columns: 1fr; }
+  .slot-day { grid-template-columns: 1fr; }
+  .truth-foot { flex-direction: column; align-items: flex-start; }
+}
 
 /* 9. contact -------------------------------------------------------------- */
 .contact-layout { display: grid; grid-template-columns: 1.25fr 1fr; gap: 48px; align-items: start; }

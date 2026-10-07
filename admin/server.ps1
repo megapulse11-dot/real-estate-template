@@ -586,7 +586,7 @@ function New-Enquiry {
 
     return [ordered]@{
         id           = 'e' + [guid]::NewGuid().ToString('N').Substring(0, 10)
-        kind         = $(if ((Get-FieldValue $Body 'kind') -eq 'booking') { 'booking' } else { 'message' })
+        kind         = $(if ((Get-FieldValue $Body 'kind') -in @('booking', 'availability', 'correction')) { Get-FieldValue $Body 'kind' } else { 'message' })
         createdAt    = (Get-Date).ToString('o')
         read         = $false
         archived     = $false
@@ -601,6 +601,18 @@ function New-Enquiry {
         date         = (ConvertTo-PlainText (Get-FieldValue $Body 'date') 40)
         listingId    = (ConvertTo-PlainText (Get-FieldValue $Body 'listingId') 60)
         listingTitle = (ConvertTo-PlainText (Get-FieldValue $Body 'listingTitle') 200)
+
+        # The viewing desk. A booking used to carry a single free-text date; it now
+        # carries the times the customer actually offered, so an agent can confirm
+        # one instead of ringing to discover it. Both forms are kept: `slots` is the
+        # structured list for triaging against a diary, `timesWanted` is the prose
+        # the inbox shows. Neither is derived from the other here, so a client
+        # sending one still gets something readable.
+        reference    = (ConvertTo-PlainText (Get-FieldValue $Body 'reference') 40)
+        timesWanted  = (ConvertTo-PlainText (Get-FieldValue $Body 'timesWanted') 300)
+        agentName    = (ConvertTo-PlainText (Get-FieldValue $Body 'agentName') 120)
+        agentId      = (ConvertTo-PlainText (Get-FieldValue $Body 'agentId') 60)
+        slots        = @($Body.slots | ForEach-Object { ConvertTo-PlainText $_ 40 } | Where-Object { $_ })
     }
 }
 
@@ -749,7 +761,27 @@ function Invoke-Api {
             }
 
             $item = $items[$index]
-            if ((Get-FieldValue $body 'read') -is [bool]) { $item.read = [bool](Get-FieldValue $body 'read') }
+            if ((Get-FieldValue $body 'read') -is [bool]) {
+                $markingRead = [bool](Get-FieldValue $body 'read')
+                $item.read = $markingRead
+                # When a viewing request was first opened, stamped once and never
+                # moved. The response-time figure in the admin metrics is measured
+                # from this, so re-reading a request later must not make the office
+                # look faster than it was - the first open is the honest number.
+                #
+                # Read through Get-FieldValue like every other optional field here,
+                # and added with Add-Member, because both are load-bearing under
+                # Set-StrictMode and on PSCustomObject:
+                #   - touching $item.readAt when the property is absent throws
+                #     "the property 'readAt' cannot be found" rather than returning
+                #     nothing, which would abort the whole stamp;
+                #   - and a plain assignment cannot create the property either.
+                # Both failures are silent from the caller's side - the PATCH still
+                # answers ok - so the metric would read "never opened" forever.
+                if ($markingRead -and -not (Get-FieldValue $item 'readAt')) {
+                    $item | Add-Member -NotePropertyName 'readAt' -NotePropertyValue (Get-Date).ToString('o') -Force
+                }
+            }
             if ((Get-FieldValue $body 'archived') -is [bool]) { $item.archived = [bool](Get-FieldValue $body 'archived') }
             $items[$index] = $item
             $store.enquiries = $items

@@ -579,8 +579,157 @@ async function loadEnquiries() {
     enquiries = payload.data.enquiries || [];
     updateEnquiryBadge();
     renderEnquiries();
+    renderDeskMetrics();
   } catch (problem) {
     announce(problem.message);
+  }
+}
+
+/*
+ * Did the office actually work the viewing desk?
+ *
+ * The site promises a named agent, a reference and an escalation route, and a
+ * promise nobody measures is a promise nobody keeps. These are the numbers behind
+ * the audit's "Confirmed Viewing Desk": how quickly a request is opened, how many
+ * were never opened at all, how many carry the times needed to confirm one without
+ * a phone call, and how many people reported a listing as wrong.
+ *
+ * Everything here is derived from the enquiries file rather than counted by hand,
+ * so it cannot drift from the inbox. Two rules keep it honest:
+ *
+ *   1. Nothing is printed as a rate until there is enough data for a rate to
+ *      mean anything. One request opened in four hours is not "a 4 hour response
+ *      time"; it is one request, and it is labelled with the count it came from.
+ *
+ *   2. A request that has not been opened yet is counted as unanswered rather than
+ *      quietly dropped. Excluding the slow ones from the average is how a desk
+ *      reports a 20-minute response time while somebody waits three days.
+ */
+function renderDeskMetrics() {
+  const host = $('#desk-metrics');
+  if (!host) return;
+
+  const viewings = enquiries.filter((item) => item.kind === 'booking' || item.kind === 'availability');
+  if (!viewings.length) {
+    host.hidden = true;
+    const table = $('#desk-metrics-table');
+    if (table) table.hidden = true;
+    return;
+  }
+  host.hidden = false;
+
+  const now = Date.now();
+  // How long each request sat before somebody opened it. A request still unread is
+  // not given an infinite time here - it is counted separately as unanswered,
+  // which is the number that actually needs watching.
+  const responded = viewings
+    .filter((item) => item.readAt && !Number.isNaN(Date.parse(item.readAt)))
+    .map((item) => ({ item, hours: (Date.parse(item.readAt) - Date.parse(item.createdAt)) / 3600000 }))
+    .filter((row) => row.hours >= 0)
+    .sort((a, b) => a.hours - b.hours);
+
+  const median = responded.length ? responded[Math.floor((responded.length - 1) / 2)] : null;
+  const slowest = responded.length ? responded[responded.length - 1] : null;
+
+  // Unanswered means never opened, and old enough that opening it now would
+  // already be late. A request from ten minutes ago is not a failure.
+  const GRACE_HOURS = 24;
+  const unanswered = viewings.filter((item) => !item.readAt && (now - Date.parse(item.createdAt)) > GRACE_HOURS * 3600000);
+  const stillOpen = viewings.filter((item) => !item.read && !item.archived);
+  // A viewing request that arrived without a time is one the agent has to phone
+  // back to arrange - the exact thing the desk exists to avoid.
+  const noTimes = viewings.filter((item) => !(Array.isArray(item.slots) ? item.slots : []).length);
+  const corrections = enquiries.filter((item) => item.kind === 'correction');
+
+  const hours = (value) => {
+    if (value === null) return '—';
+    if (value < 1) return `${Math.max(1, Math.round(value * 60))} min`;
+    if (value < 48) return `${Math.round(value)} h`;
+    return `${Math.round(value / 24)} days`;
+  };
+
+  const cards = [
+    {
+      label: 'Median first response',
+      value: hours(median ? median.hours : null),
+      note: median
+        ? `Across ${responded.length} of ${viewings.length} opened`
+        : 'Nothing opened yet'
+    },
+    {
+      label: 'Slowest opened',
+      value: hours(slowest ? slowest.hours : null),
+      note: slowest ? 'Longest a request waited to be opened' : 'No response recorded'
+    },
+    {
+      label: 'No response',
+      value: String(unanswered.length),
+      note: unanswered.length ? `Unopened for over ${GRACE_HOURS} h` : 'Every request opened in time',
+      tone: unanswered.length ? 'bad' : 'good'
+    },
+    {
+      label: 'Awaiting a reply',
+      value: String(stillOpen.length),
+      note: stillOpen.length ? 'Open in the inbox now' : 'Inbox is clear'
+    },
+    {
+      label: 'Came with times',
+      value: `${Math.round(((viewings.length - noTimes.length) / viewings.length) * 100)}%`,
+      note: noTimes.length ? `${noTimes.length} need a phone call to arrange` : 'All confirmable from the request',
+      tone: noTimes.length ? 'warn' : 'good'
+    },
+    {
+      label: 'Reported as wrong',
+      value: String(corrections.length),
+      note: corrections.length ? 'Listing corrections sent in' : 'Nobody has reported a listing'
+    }
+  ];
+
+  /*
+   * Written into the cards grid rather than the panel itself: the panel also
+   * holds the per-agent table, and replacing the panel's innerHTML would delete
+   * the very element the next few lines are about to fill.
+   */
+  $('#desk-metrics-cards').innerHTML = cards.map((card) => `
+    <div class="metric${card.tone ? ` metric--${card.tone}` : ''}">
+      <p class="metric__label">${escapeHtml(card.label)}</p>
+      <p class="metric__value">${escapeHtml(card.value)}</p>
+      <p class="metric__note">${escapeHtml(card.note)}</p>
+    </div>`).join('');
+
+  /*
+   * Named per agent, because "the office" is not a thing anybody can improve.
+   * The promise is made in the agent's name on the listing, so the number belongs
+   * to them. Unattributed requests are grouped rather than dropped - a client that
+   * predates the `agentName` field must still appear in the total.
+   */
+  const byAgent = new Map();
+  for (const item of viewings) {
+    const who = item.agentName || 'Unattributed';
+    const row = byAgent.get(who) || { total: 0, opened: 0, hours: [] };
+    row.total += 1;
+    if (item.readAt && !Number.isNaN(Date.parse(item.readAt))) {
+      const took = (Date.parse(item.readAt) - Date.parse(item.createdAt)) / 3600000;
+      if (took >= 0) { row.opened += 1; row.hours.push(took); }
+    }
+    byAgent.set(who, row);
+  }
+
+  const table = $('#desk-metrics-table');
+  if (table) {
+    table.hidden = false;
+    $('tbody', table).innerHTML = [...byAgent.entries()]
+      .map(([who, row]) => {
+        const sorted = [...row.hours].sort((a, b) => a - b);
+        const mid = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : null;
+        return `<tr>
+          <td>${escapeHtml(who)}</td>
+          <td>${row.total}</td>
+          <td>${row.opened}</td>
+          <td>${escapeHtml(hours(mid))}</td>
+        </tr>`;
+      })
+      .join('') || '<tr><td colspan="4">No viewing requests yet.</td></tr>';
   }
 }
 
@@ -606,27 +755,59 @@ function renderEnquiries() {
   }
 
   $('#enquiries-body').innerHTML = rows.map((item) => {
+    // Three kinds, not two. A correction from the Listing Truth panel ("this has
+    // sold") is a listing-maintenance signal and must not be filed under viewings,
+    // or the office works the booking queue and the stale listing stays up.
     const isBooking = item.kind === 'booking';
-    const heading = isBooking ? `Viewing — ${item.listingTitle || 'a property'}` : (item.intent || 'Enquiry');
-    const notes = [item.message, isBooking ? '' : item.detail].filter(Boolean);
+    const isAvailability = item.kind === 'availability';
+    const isCorrection = item.kind === 'correction';
+    const heading = (isBooking || isAvailability)
+      ? `Viewing — ${item.listingTitle || 'a property'}`
+      : (item.intent || 'Enquiry');
+
+    // The chosen times, printed first and in full. An agent triaging this inbox
+    // against a diary needs the slots before they read anything else the customer
+    // wrote, and the free-text note is the thing most likely to be skimmed.
+    const slots = Array.isArray(item.slots) ? item.slots : [];
+    const times = slots.length
+      ? `<p class="enquiry__slots"><strong>Wants:</strong> ${escapeHtml(item.timesWanted || slots.map((s) => String(s).replace('T', ', ')).join(' · '))}</p>`
+      : '';
+
+    const notes = [item.message, (isBooking || isAvailability) ? '' : item.detail].filter(Boolean);
     const contact = [
       item.email ? `<a href="mailto:${escapeHtml(item.email)}">${escapeHtml(item.email)}</a>` : '<span class="entity__meta">no email</span>',
       item.phone ? `<a href="${escapeHtml(telHref(item.phone))}">${escapeHtml(item.phone)}</a>` : '',
-      isBooking && item.date ? `<strong>wants ${escapeHtml(item.date)}</strong>` : '',
-      !isBooking && item.channel ? `prefers ${escapeHtml(item.channel)}` : '',
-      !isBooking && item.updates ? 'wants new listings' : ''
+      item.reference ? `<strong>ref ${escapeHtml(item.reference)}</strong>` : '',
+      isBooking && item.date ? `wants ${escapeHtml(item.date)}` : '',
+      !isBooking && !isAvailability && item.channel ? `prefers ${escapeHtml(item.channel)}` : '',
+      !isBooking && !isAvailability && item.updates ? 'wants new listings' : ''
     ].filter(Boolean).join(' &middot; ');
 
+    // Who the customer was told would handle it. The site names an agent before
+    // the enquiry is sent, so the office needs to be able to check afterwards that
+    // it actually reached them rather than the general inbox.
+    const routed = item.agentName ? `<p class="enquiry__routed">Promised to <strong>${escapeHtml(item.agentName)}</strong></p>` : '';
+
+    const pill = isCorrection
+      ? '<span class="pill pill--danger">Correction</span>'
+      : isAvailability
+        ? '<span class="pill pill--accent">Availability</span>'
+        : isBooking
+          ? '<span class="pill pill--rent">Viewing</span>'
+          : '<span class="pill pill--sale">Message</span>';
+
     return `
-      <article class="enquiry${item.read ? '' : ' is-unread'}" data-id="${escapeHtml(item.id)}">
+      <article class="enquiry${item.read ? '' : ' is-unread'}${isCorrection ? ' is-correction' : ''}" data-id="${escapeHtml(item.id)}">
         <header class="enquiry__head">
           <div>
             <div class="enquiry__who">${escapeHtml(item.name)}${item.read ? '' : '<span class="enquiry__dot" aria-label="Unread"></span>'}</div>
             <div class="enquiry__meta">${escapeHtml(heading)} · ${escapeHtml(formatWhen(item.createdAt))}</div>
           </div>
-          <span class="pill ${isBooking ? 'pill--rent' : 'pill--sale'}">${isBooking ? 'Viewing' : 'Message'}</span>
+          ${pill}
         </header>
         <div class="enquiry__contact">${contact}</div>
+        ${routed}
+        ${times}
         ${notes.length ? `<div class="enquiry__body">${notes.map((note) => `<p>${escapeHtml(note)}</p>`).join('')}</div>` : ''}
         <footer class="enquiry__actions">
           <button class="btn btn--secondary btn--sm" data-enquiry-read="${escapeHtml(item.id)}" type="button">${item.read ? 'Mark unread' : 'Mark read'}</button>
@@ -794,6 +975,29 @@ function syncStayPanel(body, panel) {
   panel.querySelector('legend').textContent = rental ? 'Short stays' : 'Promotion';
 }
 
+/*
+ * The tenancy and land-terms panels follow the same rule as the specification
+ * blocks, for the same reason.
+ *
+ * A house for sale has no lease term and a parcel of ground is never rented, so
+ * showing either panel would put fields in front of an editor that the site will
+ * discard on save. Hiding them - rather than letting the office fill in values
+ * that are then thrown away without explanation - is the difference between an
+ * editor believing the form and quietly working around it.
+ */
+function syncCategoryPanels(body) {
+  const status = $('[name="status"]', body);
+  const type = $('[name="type"]', body);
+  const rental = Boolean(status && status.value === 'For rent');
+  const land = Boolean(type && isLandType(type.value));
+
+  const letPanel = $('[data-let-panel]', body);
+  if (letPanel) letPanel.hidden = !rental || land;
+
+  const landPanel = $('[data-land-terms]', body);
+  if (landPanel) landPanel.hidden = !land;
+}
+
 /** The type <select>, grouped the way the site's filter is grouped. */
 const typeOptions = (selected) => `
   <optgroup label="Homes">${HOME_TYPES.map((type) => `<option${type === selected ? ' selected' : ''}>${type}</option>`).join('')}</optgroup>
@@ -939,6 +1143,107 @@ function editListing(existing) {
     </fieldset>
 
     <fieldset>
+      <legend>Listing truth</legend>
+      <div class="form-grid">
+        <label class="field"><span>Last confirmed on</span>
+          <input name="confirmedOn" type="date" value="${escapeHtml(draft.truth?.confirmedOn || '')}" />
+          <small class="hint">The day somebody last checked this was still available at this price. This is what the website prints as "confirmed N days ago", and the "recently confirmed" sort reads it.</small>
+        </label>
+        <label class="field"><span>Verified on</span>
+          <input name="verifiedOn" type="date" value="${escapeHtml(draft.truth?.verifiedOn || '')}" />
+          <small class="hint">When the checks below were last carried out. Leave blank if they were never done.</small>
+        </label>
+        <label class="field field--full"><span>Information source</span>
+          <input name="source" value="${escapeHtml(draft.truth?.source || '')}" placeholder="e.g. Verified agent submission, owner confirmed" />
+          <small class="hint">Where the information came from. Never write just "verified" - name the source, and let the scope below say what was checked.</small>
+        </label>
+        <label class="field field--full"><span>Verification scope <small>One per line</small></span>
+          <textarea name="scope" rows="3" placeholder="Agent identity and listing authority checked&#10;Price and availability confirmed with the owner">${escapeHtml((draft.truth?.scope || []).join('\n'))}</textarea>
+          <small class="hint">Exactly what was checked, and nothing more. This is printed on the listing word for word, so "we know who this agent is" must not be written as "we inspected the house".</small>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset data-let-panel>
+      <legend>Tenancy terms</legend>
+      <div class="form-grid">
+        <label class="field"><span>Lease term</span><input name="leaseTerm" value="${escapeHtml(draft.let?.leaseTerm || '')}" placeholder="12 months" /></label>
+        <label class="field"><span>Deposit</span><input name="letDeposit" type="number" min="0" value="${Number(draft.let?.deposit) || ''}" placeholder="None if blank" /></label>
+        <label class="field"><span>Move-in date</span><input name="moveIn" type="date" value="${escapeHtml(draft.let?.moveIn || '')}" /></label>
+        <label class="field"><span>Pets</span><input name="pets" value="${escapeHtml(draft.let?.pets || '')}" placeholder="No pets" /></label>
+        <label class="field field--full"><span>Utilities</span>
+          <input name="letUtilities" value="${escapeHtml(draft.let?.utilities || '')}" placeholder="e.g. Water and heating included. Electricity metered." />
+          <small class="hint">Say who pays for what. "Included" is not an answer.</small>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset data-land-terms>
+      <legend>What you may do with it</legend>
+      <div class="form-grid">
+        <label class="field field--full"><span>Permitted use</span>
+          <input name="permittedUse" value="${escapeHtml(draft.land?.permittedUse || '')}" placeholder="e.g. Residential - single dwelling" />
+        </label>
+        <label class="field field--full"><span>Restrictions and covenants</span>
+          <textarea name="restrictions" rows="2" placeholder="e.g. No building within 6 m of the river boundary">${escapeHtml(draft.land?.restrictions || '')}</textarea>
+          <small class="hint">Zoning says what the council permits; this is what the title forbids. Both are printed, and they are not the same thing.</small>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Promotion, if it is one</legend>
+      <div class="form-grid">
+        <label class="field"><span>Deal started</span>
+          <input name="hotSince" type="date" value="${escapeHtml(draft.promotion?.hotSince || '')}" />
+        </label>
+        <label class="field field--full"><span>Why the price moved</span>
+          <input name="hotReason" value="${escapeHtml(draft.promotion?.hotReason || '')}" placeholder="e.g. Reduced to fill the winter vacancy, agreed with the owner." />
+        </label>
+        <label class="field field--full"><span>What the discount does NOT include</span>
+          <input name="hotExcludes" value="${escapeHtml(draft.promotion?.hotExcludes || '')}" placeholder="e.g. The deposit and booking fee are not reduced." />
+          <small class="hint">The most important field on this panel. A reduced rent that excludes the deposit is a smaller discount than the headline, and the reader is entitled to know before they act.</small>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Our view of the value</legend>
+      <div class="form-grid">
+        <label class="field"><span>Low</span><input name="valLow" type="number" min="0" value="${Number(draft.valuation?.low) || ''}" placeholder="Blank for no opinion" /></label>
+        <label class="field"><span>High</span><input name="valHigh" type="number" min="0" value="${Number(draft.valuation?.high) || ''}" /></label>
+        <label class="field"><span>Valued on</span><input name="valOn" type="date" value="${escapeHtml(draft.valuation?.on || '')}" /></label>
+        <label class="field"><span>Confidence</span>
+          <select name="valConfidence">${['High', 'Medium', 'Low'].map((c) => `<option${c === draft.valuation?.confidence ? ' selected' : ''}>${c}</option>`).join('')}</select>
+          <small class="hint">Dropped to Low automatically when there is only one comparable. The asking price should sit inside the range.</small>
+        </label>
+        <label class="field field--full"><span>Comparable sales <small>One per line</small></span>
+          <textarea name="comps" rows="3" placeholder="p7 Harbourline Tower - 3200 sq ft waterfront, sold 14 Aug 2026">${escapeHtml((draft.valuation?.comps || []).join('\n'))}</textarea>
+        </label>
+        <label class="field field--full"><span>What this assumes <small>One per line</small></span>
+          <textarea name="assumptions" rows="3" placeholder="Assumes the mooring rights are transferable">${escapeHtml((draft.valuation?.assumptions || []).join('\n'))}</textarea>
+        </label>
+      </div>
+      <label class="field field--check"><input name="sponsored" type="checkbox"${draft.sponsored ? ' checked' : ''} />
+        <span>Sponsored placement — this position is paid for</span>
+      </label>
+      <small class="hint">Only ever enabled by the office, never by an agent. Paying for a position must never buy the appearance of extra checks, so it is stored and printed separately from the truth fields above.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend>Price history</legend>
+      <div class="form-grid">
+        <label class="field field--full"><span>Previous price</span>
+          <input name="priceReducedFrom" type="number" min="0" value="${draft.priceHistory?.length ? Number(draft.priceHistory[draft.priceHistory.length - 1].from) || '' : ''}" placeholder="Blank if the price has never changed" />
+          <small class="hint">Must be higher than the price being asked. This is separate from the hot-deal "original price" on purpose: a reduction is the market moving, a promotion is the office deciding, and only the first one belongs in the "price reduced" sort.</small>
+        </label>
+        <label class="field"><span>Reduced on</span>
+          <input name="priceReducedOn" type="date" value="${escapeHtml(draft.priceHistory?.length ? draft.priceHistory[draft.priceHistory.length - 1].on : '')}" />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend>Description</legend>
       <label class="field"><textarea name="description">${escapeHtml(draft.description)}</textarea></label>
     </fieldset>
@@ -1041,6 +1346,104 @@ function editListing(existing) {
       else delete updated.hotUntil;
       if (!updated.hot) updated.hot = false;
 
+      /*
+       * Listing truth.
+       *
+       * Written on every save, including when it is blank - an editor who clears
+       * the confirmation date is removing a claim, and the site has to be able to
+       * say "not confirmed on record" rather than quietly keeping the old date and
+       * continuing to claim a freshness nobody stands behind. The block is kept
+       * even when empty, because its absence and its emptiness mean different
+       * things to the renderer.
+       */
+      updated.truth = {
+        confirmedOn: value('confirmedOn'),
+        verifiedOn: value('verifiedOn'),
+        source: value('source'),
+        scope: value('scope').split('\n').map((line) => line.trim()).filter(Boolean)
+      };
+
+      // Tenancy. A rental with no terms recorded shows no panel at all, which is
+      // honest; it does not show an empty one that implies there are none.
+      if (updated.status === 'For rent' && !land) {
+        const tenancy = {
+          leaseTerm: value('leaseTerm'),
+          utilities: value('letUtilities'),
+          pets: value('pets'),
+          moveIn: value('moveIn')
+        };
+        const letDeposit = Number(value('letDeposit'));
+        if (letDeposit > 0) tenancy.deposit = letDeposit;
+        // Only stored when the office actually wrote something. A blank panel on
+        // a listing that has never had terms recorded should not manufacture a
+        // record of having been asked for them.
+        if (Object.values(tenancy).some((entry) => entry)) updated.let = tenancy;
+        else delete updated.let;
+      } else {
+        delete updated.let;
+      }
+
+      /*
+       * Promotion detail. Tied to the flag: a listing that is not hot must not
+       * keep a "reason the price moved" from when it was, or the words linger on
+       * a page that no longer shows a deal.
+       */
+      if (updated.hot) {
+        updated.promotion = {
+          hotSince: value('hotSince'),
+          hotReason: value('hotReason'),
+          hotExcludes: value('hotExcludes')
+        };
+      } else {
+        delete updated.promotion;
+      }
+
+      /*
+       * Valuation. Both ends are required - a range needs two numbers, and a
+       * single figure is precisely the false precision the panel exists to avoid,
+       * so a half-filled opinion is discarded rather than half-published.
+       *
+       * The asking price is checked against the range here as well as in the
+       * tests. It is one line, and it is the difference between an agent pricing
+       * above their own opinion on purpose and an agent who typed the wrong
+       * number into the wrong box.
+       */
+      const valLow = Number(value('valLow'));
+      const valHigh = Number(value('valHigh'));
+      if (valLow > 0 && valHigh > 0 && valLow <= valHigh) {
+        if (updated.price < valLow || updated.price > valHigh) {
+          announce(`Saved, but note the price of ${money(updated.price)} sits outside the ${money(valLow)}–${money(valHigh)} range.`);
+        }
+        updated.valuation = {
+          low: valLow,
+          high: valHigh,
+          on: value('valOn'),
+          confidence: value('valConfidence') || 'Medium',
+          comps: value('comps').split('\n').map((line) => line.trim()).filter(Boolean),
+          assumptions: value('assumptions').split('\n').map((line) => line.trim()).filter(Boolean)
+        };
+      } else {
+        delete updated.valuation;
+      }
+
+      // Paid placement. Office-only, and stored entirely apart from the truth
+      // block above so that no future code path can read "this has been checked"
+      // off the back of somebody having paid for the position.
+      updated.sponsored = $('[name="sponsored"]', body).checked;
+
+      /*
+       * Price history. Only recorded when the previous figure is genuinely higher
+       * than the price being asked: an entry at or below the current price is not
+       * a reduction, and recording one would put this listing in the "price
+       * reduced" sort for something that never happened.
+       */
+      const reducedFrom = Number(value('priceReducedFrom'));
+      if (reducedFrom > updated.price) {
+        updated.priceHistory = [{ from: reducedFrom, on: value('priceReducedOn') }];
+      } else {
+        delete updated.priceHistory;
+      }
+
       if (land) {
         const plotAcres = Number(value('plotAcres')) || 0;
         updated.land = {
@@ -1050,7 +1453,11 @@ function editListing(existing) {
           titleDeed: value('titleDeed'),
           access: value('access'),
           landmarks: value('landmarks'),
-          utilities: value('utilities')
+          utilities: value('utilities'),
+          // What may be built and what the title forbids. Carried in the same
+          // block as zoning so a parcel cannot end up with one and not the other.
+          permittedUse: value('permittedUse'),
+          restrictions: value('restrictions')
         };
         // Keep `lot` agreeing with the numeric plot, since it is what the app reads.
         if (plotAcres > 0) {
@@ -1093,6 +1500,12 @@ function wireListingDrawer(draft) {
     $('[name="status"]', body)?.addEventListener('change', () => syncStayPanel(body, stayPanel));
     typeControl?.addEventListener('change', () => syncStayPanel(body, stayPanel));
   }
+
+  // Same rule, same reason: the tenancy panel is for rentals and the land-terms
+  // panel is for parcels, and both have to react to type and status changing.
+  syncCategoryPanels(body);
+  $('[name="status"]', body)?.addEventListener('change', () => syncCategoryPanels(body));
+  typeControl?.addEventListener('change', () => syncCategoryPanels(body));
 
   // Both blocks carry a "Listed by", and only one is enabled at a time, so a
   // change in either has to be reflected in the other or the agent silently

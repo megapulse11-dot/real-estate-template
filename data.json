@@ -12,7 +12,7 @@
                  "phone":  "+1 (555) 014-2200",
                  "footerNote":  "Independent estate agency for Harbor Point, Northgate and Elmwood. Selling, buying and renting since 1998.",
                  "copyright":  "© 2026 Northwind Realty. Sample content for demonstration.",
-                 "contentVersion":  "12"
+                 "contentVersion":  "28"
              },
     "listings":  [
                      {
@@ -32,11 +32,11 @@
                          "featured":  true,
                          "listed":  "2026-08-12",
                          "agentId":  "a1",
-                         "image":  "assets/homes/property_04_harbour_villa_twilight.jpg",
+                         "image":  "assets/homes/property_03_harbour_villa_yacht.jpg",
                          "images":  [
+                                        "assets/homes/property_03_harbour_villa_yacht.jpg",
                                         "assets/homes/property_04_harbour_villa_twilight.jpg",
                                         "assets/homes/property_02_harbour_villa_reflections.jpg",
-                                        "assets/homes/property_03_harbour_villa_yacht.jpg",
                                         "assets/homes/01_waterfront_exterior.jpg",
                                         "assets/homes/04_aerial_harbour_context.jpg"
                                     ],
@@ -51,7 +51,32 @@
                          "description":  "A low-slung glass villa that follows the light. The living floor opens on three sides to a sheltered terrace above the quay, so the water is the first and last thing you see. Built in 2021 to a high thermal standard, with a ground-floor studio and a heated double garage behind.",
                          "removedPhotos":  [
 
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-10-02",
+                                       "verifiedOn":  "2026-10-02",
+                                       "source":  "Verified agent submission",
+                                       "scope":  [
+                                                     "Agent identity and listing authority checked",
+                                                     "Photographs checked against the rooms shown"
+                                                 ]
+                                   },
+                         "valuation":  {
+                                           "low":  190000,
+                                           "high":  210000,
+                                           "on":  "2026-09-28",
+                                           "confidence":  "High",
+                                           "comps":  [
+                                                         "p5 Solstice Apartments - 2 bed riverside apartment, sold 6 Sep 2026",
+                                                         "p4 Marlowe House - 4 bed townhouse, sold 2 Aug 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes the mooring rights are included and transferable",
+                                                               "Assumes no major works required"
+                                                           ]
+                                       },
+                         "sponsored":  true,
+                         "hot":  false
                      },
                      {
                          "id":  "p2",
@@ -114,7 +139,31 @@
                                                null,
                                                null,
                                                null
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-24",
+                                       "source":  "Owner confirmation by phone",
+                                       "scope":  [
+                                                     "Owner reachable and confirmed still for sale",
+                                                     "Agent identity and listing authority checked"
+                                                 ],
+                                       "verifiedOn":  "2026-09-24"
+                                   },
+                         "valuation":  {
+                                           "low":  33000,
+                                           "high":  37000,
+                                           "on":  "2026-09-20",
+                                           "confidence":  "Medium",
+                                           "comps":  [
+                                                         "p6 Meadow Fold - 3 bed rural house, sold 19 May 2026",
+                                                         "p14 Ridgeback Barn - barn conversion, sold 28 Apr 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes the cabin is not a permanent residence",
+                                                               "Assumes the access track is a right of way, not a licence"
+                                                           ]
+                                       },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p3",
@@ -175,7 +224,29 @@
                          "cleaningFee":  90,
                          "serviceFee":  55,
                          "bookingFee":  60,
-                         "cancellationDays":  5
+                         "cancellationDays":  5,
+                         "truth":  {
+                                       "confirmedOn":  "2026-10-01",
+                                       "source":  "Verified agent submission, owner confirmed",
+                                       "scope":  [
+                                                     "Agent identity and listing authority checked",
+                                                     "Rent, deposit and availability confirmed with the owner"
+                                                 ],
+                                       "verifiedOn":  "2026-10-01"
+                                   },
+                         "let":  {
+                                     "leaseTerm":  "12 months",
+                                     "deposit":  4200,
+                                     "utilities":  "Water and heating included. Electricity metered.",
+                                     "pets":  "No pets",
+                                     "moveIn":  "2026-11-01"
+                                 },
+                         "promotion":  {
+                                           "hotSince":  "2026-09-28",
+                                           "hotReason":  "Reduced to fill the winter vacancy, agreed with the owner.",
+                                           "hotExcludes":  "Price is per week. The deposit and booking fee are not reduced."
+                                       },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p4",
@@ -212,7 +283,30 @@
                          "removedPhotos":  [
                                                "assets/homes/property-04.svg",
                                                "assets/homes/property-02.svg"
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-18",
+                                       "source":  "Verified agent submission",
+                                       "scope":  [
+                                                     "Agent identity and listing authority checked",
+                                                     "Photographs checked against the rooms shown"
+                                                 ],
+                                       "verifiedOn":  "2026-09-18"
+                                   },
+                         "valuation":  {
+                                           "low":  9500,
+                                           "high":  10500,
+                                           "on":  "2026-09-25",
+                                           "confidence":  "Medium",
+                                           "comps":  [
+                                                         "p5 Solstice Apartments - 2 bed apartment, sold 6 Sep 2026",
+                                                         "p1 Glasshouse on the Quay - 4 bed villa, listed 12 Aug 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes a leaseback is not required on the upper floor"
+                                                           ]
+                                       },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p5",
@@ -251,7 +345,37 @@
                                                "assets/homes/property-04.svg",
                                                "assets/homes/property-07.svg",
                                                "assets/homes/property-01.svg"
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-29",
+                                       "source":  "Managing agent submission",
+                                       "scope":  [
+                                                     "Agent identity and listing authority checked",
+                                                     "Service charges and tenure confirmed with the agent"
+                                                 ],
+                                       "verifiedOn":  "2026-09-29"
+                                   },
+                         "valuation":  {
+                                           "low":  895000,
+                                           "high":  965000,
+                                           "on":  "2026-09-30",
+                                           "confidence":  "Medium",
+                                           "comps":  [
+                                                         "p1 Glasshouse on the Quay - 4 bed villa, listed 12 Aug 2026",
+                                                         "p4 Marlowe House - 4 bed townhouse, sold 2 Aug 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes the service charge is unchanged",
+                                                               "Assumes the tenancy is unoccupied on completion"
+                                                           ]
+                                       },
+                         "priceHistory":  [
+                                              {
+                                                  "from":  990000,
+                                                  "on":  "2026-09-06"
+                                              }
+                                          ],
+                         "sponsored":  false
                      },
                      {
                          "id":  "p6",
@@ -308,7 +432,17 @@
                                                null,
                                                null,
                                                null
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-11",
+                                       "source":  "Sale completed - verified by our own record",
+                                       "scope":  [
+                                                     "Sale price and completion date on file",
+                                                     "Agent identity and listing authority checked"
+                                                 ],
+                                       "verifiedOn":  "2026-09-11"
+                                   },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p7",
@@ -368,7 +502,40 @@
                                                null,
                                                null,
                                                null
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-27",
+                                       "source":  "Managing agent submission",
+                                       "scope":  [
+                                                     "Agent identity and listing authority checked",
+                                                     "Service charges confirmed with the managing agent"
+                                                 ],
+                                       "verifiedOn":  "2026-09-27"
+                                   },
+                         "valuation":  {
+                                           "low":  2050000,
+                                           "high":  2250000,
+                                           "on":  "2026-09-26",
+                                           "confidence":  "High",
+                                           "comps":  [
+                                                         "p1 Glasshouse on the Quay - 4 bed villa, listed 12 Aug 2026",
+                                                         "p5 Solstice Apartments - sold 6 Sep 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes current leases are assigned, not cleared"
+                                                           ]
+                                       },
+                         "priceHistory":  [
+                                              {
+                                                  "from":  2250000,
+                                                  "on":  "2026-08-19"
+                                              },
+                                              {
+                                                  "from":  2200000,
+                                                  "on":  "2026-09-12"
+                                              }
+                                          ],
+                         "sponsored":  false
                      },
                      {
                          "id":  "p8",
@@ -421,7 +588,29 @@
                          "minNights":  2,
                          "availableTo":  "2027-01-15",
                          "deposit":  300,
-                         "bookingFee":  45
+                         "bookingFee":  45,
+                         "truth":  {
+                                       "confirmedOn":  "2026-10-03",
+                                       "source":  "Owner confirmation by phone",
+                                       "scope":  [
+                                                     "Owner confirmed still available",
+                                                     "Nightly rate, cleaning fee and cancellation terms confirmed"
+                                                 ],
+                                       "verifiedOn":  "2026-10-03"
+                                   },
+                         "let":  {
+                                     "leaseTerm":  "Monthly, rolling, 1 month notice",
+                                     "deposit":  1200,
+                                     "utilities":  "Electricity and water metered. Heating oil charged separately.",
+                                     "pets":  "One dog or cat welcome",
+                                     "moveIn":  "2026-10-15"
+                                 },
+                         "promotion":  {
+                                           "hotSince":  "2026-10-01",
+                                           "hotReason":  "Owner reducing the nightly rate for shoulder-season weeks.",
+                                           "hotExcludes":  "Rate is per night and applies to a stay of 2 nights or more. The cleaning fee is charged once per stay and is not reduced."
+                                       },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p9",
@@ -454,7 +643,9 @@
                                       "titleDeed":  "Freehold",
                                       "access":  "Graded dirt road",
                                       "landmarks":  "Ridge line with valley views to the south",
-                                      "utilities":  "Grid power at the boundary, no water connection"
+                                      "utilities":  "Grid power at the boundary, no water connection",
+                                      "permittedUse":  "Agricultural, grazing and forestry",
+                                      "restrictions":  "No planning permission granted for buildings. Spring on the boundary is a habitat - do not infill."
                                   },
                          "features":  [
                                           "Untouched ground",
@@ -483,7 +674,31 @@
                                                null,
                                                null,
                                                null
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-30",
+                                       "source":  "Land registry search",
+                                       "scope":  [
+                                                     "Title searched against the registry",
+                                                     "Agent identity and listing authority checked"
+                                                 ],
+                                       "verifiedOn":  "2026-09-30"
+                                   },
+                         "valuation":  {
+                                           "low":  8100000,
+                                           "high":  8900000,
+                                           "on":  "2026-09-30",
+                                           "confidence":  "Medium",
+                                           "comps":  [
+                                                         "p11 Elmwood Orchard Land - 40 acres of orchard, sold 6 Jul 2026",
+                                                         "p12 Northgate Riverside Plot - sold 14 May 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes the title search carries no undisclosed covenant",
+                                                               "Assumes no re-survey is required"
+                                                           ]
+                                       },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p10",
@@ -514,7 +729,9 @@
                                       "titleDeed":  "Freehold",
                                       "access":  "Tarmac road frontage",
                                       "landmarks":  "Opposite the new retail park",
-                                      "utilities":  "Water, power and sewer laid to the boundary"
+                                      "utilities":  "Water, power and sewer laid to the boundary",
+                                      "permittedUse":  "Commercial - warehouse, light industrial or office",
+                                      "restrictions":  "No residential conversion without planning consent. Two access points; the eastern one is unmade."
                                   },
                          "features":  [
                                           "Tarmac frontage",
@@ -536,7 +753,31 @@
                                                null,
                                                null,
                                                null
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-19",
+                                       "source":  "Land registry search, agent inspection",
+                                       "scope":  [
+                                                     "Title searched against the registry",
+                                                     "Site visited and boundary markers confirmed"
+                                                 ],
+                                       "verifiedOn":  "2026-09-19"
+                                   },
+                         "valuation":  {
+                                           "low":  17600000,
+                                           "high":  19300000,
+                                           "on":  "2026-09-22",
+                                           "confidence":  "Medium",
+                                           "comps":  [
+                                                         "p9 Kijani Ridge Virgin Land - 20 acres, sold 14 Aug 2026",
+                                                         "p11 Elmwood Orchard Land - sold 6 Jul 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes the eastern access is usable as shown",
+                                                               "Assumes no contamination study is required by a lender"
+                                                           ]
+                                       },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p11",
@@ -568,7 +809,9 @@
                                       "titleDeed":  "Freehold",
                                       "access":  "Gravel road",
                                       "landmarks":  "Borehole producing 40 barrels a day",
-                                      "utilities":  "Solar array and borehole in place"
+                                      "utilities":  "Solar array and borehole in place",
+                                      "permittedUse":  "Agricultural with residential farmhouse and outbuildings",
+                                      "restrictions":  "Orchard is in production and cannot be built on. Tree preservation order on the north row."
                                   },
                          "features":  [
                                           "Borehole in place",
@@ -584,7 +827,36 @@
                                                null,
                                                null,
                                                null
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-09-08",
+                                       "source":  "Land registry search",
+                                       "scope":  [
+                                                     "Title searched against the registry",
+                                                     "Orchard planted area confirmed on site"
+                                                 ],
+                                       "verifiedOn":  "2026-09-08"
+                                   },
+                         "valuation":  {
+                                           "low":  4000000,
+                                           "high":  4380000,
+                                           "on":  "2026-09-15",
+                                           "confidence":  "Medium",
+                                           "comps":  [
+                                                         "p9 Kijani Ridge Virgin Land - 20 acres, sold 14 Aug 2026",
+                                                         "p12 Northgate Riverside Plot - sold 14 May 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes the orchard continues at its current yield"
+                                                           ]
+                                       },
+                         "priceHistory":  [
+                                              {
+                                                  "from":  4500000,
+                                                  "on":  "2026-08-19"
+                                              }
+                                          ],
+                         "sponsored":  false
                      },
                      {
                          "id":  "p12",
@@ -616,7 +888,9 @@
                                       "titleDeed":  "Freehold",
                                       "access":  "Tarmac road frontage",
                                       "landmarks":  "Fifteen minutes walk to the market",
-                                      "utilities":  "Power and water at the street"
+                                      "utilities":  "Power and water at the street",
+                                      "permittedUse":  "Residential - single dwelling",
+                                      "restrictions":  "No building within 6 m of the river boundary. Sited and access consent not yet granted."
                                   },
                          "features":  [
                                           "Corner plot",
@@ -629,7 +903,30 @@
                          "removedPhotos":  [
                                                null,
                                                "assets/homes/Peaceful-Riverside-Meadow-and-Slipway.png"
-                                           ]
+                                           ],
+                         "truth":  {
+                                       "confirmedOn":  "2026-10-01",
+                                       "source":  "Land registry search, agent inspection",
+                                       "scope":  [
+                                                     "Title searched against the registry",
+                                                     "Utilities at the street confirmed with the utility"
+                                                 ],
+                                       "verifiedOn":  "2026-10-01"
+                                   },
+                         "valuation":  {
+                                           "low":  3050000,
+                                           "high":  3350000,
+                                           "on":  "2026-10-01",
+                                           "confidence":  "High",
+                                           "comps":  [
+                                                         "p11 Elmwood Orchard Land - 40 acres, sold 6 Jul 2026",
+                                                         "p9 Kijani Ridge Virgin Land - sold 14 Aug 2026"
+                                                     ],
+                                           "assumptions":  [
+                                                               "Assumes services are connectable at the stated cost"
+                                                           ]
+                                       },
+                         "sponsored":  false
                      },
                      {
                          "id":  "p13",
@@ -643,7 +940,7 @@
                          "baths":  2,
                          "area":  940,
                          "lot":  "-",
-                         "year":  2023,
+                         "year":  2019,
                          "parking":  1,
                          "featured":  true,
                          "listed":  "2026-10-02",
@@ -663,21 +960,30 @@
                                           "Short-let welcome"
                                       ],
                          "description":  "A corner apartment on the fourth floor with a glass-walled living space facing the water and a roof terrace that catches the last of the sun. Set up for short stays as well as full tenancies, with linen and weekly housekeeping included at the nightly rate.",
-                         "stays":  [
-                                       "Nightly",
-                                       "Weekly",
-                                       "Monthly"
-                                   ],
-                         "nightly":  210,
-                         "minNights":  2,
-                         "availableFrom":  "2026-10-05",
                          "removedPhotos":  [
 
                                            ],
-                         "deposit":  500,
                          "cleaningFee":  120,
                          "serviceFee":  85,
-                         "cancellation":  "Free cancellation up to 14 days before arrival; the deposit is returned in full after check-out"
+                         "cancellation":  "Free cancellation up to 14 days before arrival; the deposit is returned in full after check-out",
+                         "truth":  {
+                                       "confirmedOn":  "2026-10-02",
+                                       "verifiedOn":  "2026-10-02",
+                                       "source":  "Verified agent submission",
+                                       "scope":  [
+                                                     "Agent identity and listing authority checked",
+                                                     "Rent and availability confirmed with the landlord"
+                                                 ]
+                                   },
+                         "sponsored":  false,
+                         "hot":  false,
+                         "let":  {
+                                     "leaseTerm":  "6 or 12 months",
+                                     "utilities":  "All bills included in the rent",
+                                     "pets":  "No pets",
+                                     "moveIn":  "2026-11-01",
+                                     "deposit":  2800
+                                 }
                      },
                      {
                          "id":  "p14",
@@ -724,7 +1030,24 @@
                          "deposit":  900,
                          "cleaningFee":  140,
                          "serviceFee":  95,
-                         "cancellationDays":  30
+                         "cancellationDays":  30,
+                         "truth":  {
+                                       "confirmedOn":  "2026-10-03",
+                                       "source":  "Owner confirmation by phone",
+                                       "scope":  [
+                                                     "Owner confirmed still available",
+                                                     "Weekly and monthly rates confirmed with the owner"
+                                                 ],
+                                       "verifiedOn":  "2026-10-03"
+                                   },
+                         "let":  {
+                                     "leaseTerm":  "3, 6 or 12 months",
+                                     "deposit":  1800,
+                                     "utilities":  "Electricity and water metered. Broadband included.",
+                                     "pets":  "Dogs welcome, two maximum",
+                                     "moveIn":  "2026-10-20"
+                                 },
+                         "sponsored":  false
                      }
                  ],
     "agents":  [

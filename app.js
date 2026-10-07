@@ -346,6 +346,389 @@ function rateComparison(listing) {
 }
 const formatArea = (listing) => `${numberFormat.format(listing.area)} ft²`;
 
+/* ---- listing truth -------------------------------------------------------- */
+/*
+ * What we know about a listing, and how we know it.
+ *
+ * Every portal prints a price. Almost none of them print the three things that
+ * decide whether the price is worth acting on: when somebody last checked it was
+ * still true, who checked it, and what they actually checked. That gap is the
+ * whole opportunity this site is built around, so it is modelled as data rather
+ * than as a badge.
+ *
+ * Three rules govern everything below:
+ *
+ *   1. Never say "verified" on its own. A generic badge covering "we know who
+ *      this agent is" and one covering "somebody stood in the house" are the
+ *      same word to a reader and completely different promises, so the scope is
+ *      always spelled out and always per listing.
+ *
+ *   2. Never print a date the data does not hold. An older listing with no
+ *      confirmation date is shown as unconfirmed rather than being given the
+ *      `listed` date, because "last confirmed" and "first listed" are not the
+ *      same claim and conflating them is how a stale listing looks fresh.
+ *
+ *   3. Age is stated in words a person would use. "Confirmed 3 days ago" is
+ *      actionable; "2026-10-01" requires the reader to do the arithmetic against
+ *      a date they have to notice.
+ */
+
+/** Normalised truth, tolerant of an older listing that predates the block. */
+function truthOf(listing) {
+  const truth = listing.truth || {};
+  const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+  return {
+    confirmedOn: isDate(truth.confirmedOn) ? truth.confirmedOn : '',
+    verifiedOn: isDate(truth.verifiedOn) ? truth.verifiedOn : '',
+    source: String(truth.source || '').trim(),
+    scope: Array.isArray(truth.scope) ? truth.scope.filter((item) => typeof item === 'string' && item.trim()) : []
+  };
+}
+
+/** Whole days since a confirmation, or null when there is no date to count from. */
+function confirmedDaysAgo(listing) {
+  const { confirmedOn } = truthOf(listing);
+  if (!confirmedOn) return null;
+  const then = new Date(`${confirmedOn}T00:00:00`);
+  if (Number.isNaN(then.getTime())) return null;
+  // Compared against local midnight rather than "now": a confirmation made this
+  // morning is 0 days old, and rounding against the current time of day would
+  // print "1 day ago" for something checked four hours ago.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((today - then) / 86400000));
+}
+
+/*
+ * Whether a confirmation is still good enough to lean on.
+ *
+ * The thresholds are deliberately short and deliberately visible. A portal that
+ * quietly treats a nine-month-old confirmation as current has not solved
+ * anything; one that says "confirmed 8 months ago" has, because the reader now
+ * knows to ask. Twenty-eight days is roughly a month, which is about as long as
+ * a buyer will hold a listing in mind without checking it again.
+ */
+const STALE_AFTER_DAYS = 28;
+const OLD_AFTER_DAYS = 90;
+
+function confirmationState(listing) {
+  const days = confirmedDaysAgo(listing);
+  if (days === null) return { level: 'none', days: null };
+  if (days <= STALE_AFTER_DAYS) return { level: 'fresh', days };
+  if (days <= OLD_AFTER_DAYS) return { level: 'aging', days };
+  return { level: 'old', days };
+}
+
+/** "Confirmed today" / "Confirmed 3 days ago" / "Not confirmed on record". */
+function confirmationSentence(listing) {
+  const { level, days } = confirmationState(listing);
+  if (level === 'none') return 'Not confirmed on record';
+  if (days === 0) return 'Confirmed today';
+  if (days === 1) return 'Confirmed yesterday';
+  if (days < 14) return `Confirmed ${days} days ago`;
+  if (days < 60) return `Confirmed ${Math.round(days / 7)} weeks ago`;
+  return `Confirmed ${Math.round(days / 30)} months ago`;
+}
+
+/*
+ * How much of this listing is actually filled in, as a percentage.
+ *
+ * Computed from the fields rather than stored, so it cannot drift away from the
+ * data it describes: add a bathroom and the score moves, and nothing has to be
+ * remembered. The field list is per category, because "complete" means something
+ * different for a house than for a parcel - a land listing is not missing a
+ * bedroom count, it simply has no bedrooms.
+ *
+ * This is published rather than hidden. An incomplete listing is a normal thing,
+ * and telling a renter "this one has no stated utilities" is more use to them
+ * than a listing that looks finished and quietly is not.
+ */
+const TRUTH_FIELDS = {
+  home: [
+    ['Price', (l) => Number(l.price) > 0],
+    ['Bedrooms', (l) => Number(l.beds) > 0],
+    ['Bathrooms', (l) => Number(l.baths) > 0],
+    ['Floor area', (l) => Number(l.area) > 0],
+    ['Plot', (l) => Boolean(String(l.lot || '').trim())],
+    ['Year built', (l) => Number(l.year) > 0],
+    ['Parking', (l) => Number(l.parking) > 0],
+    ['Description', (l) => String(l.description || '').trim().length > 40],
+    ['Features', (l) => (l.features || []).length >= 3],
+    ['Photographs', (l) => (l.images || []).length >= 1]
+  ],
+  land: [
+    ['Price', (l) => Number(l.price) > 0],
+    ['Plot size', (l) => Number(l.land?.plotAcres) > 0],
+    ['Zoning', (l) => Boolean(String(l.land?.zoning || '').trim())],
+    ['Title', (l) => Boolean(String(l.land?.titleDeed || '').trim())],
+    ['Road access', (l) => Boolean(String(l.land?.access || '').trim())],
+    ['Utilities', (l) => Boolean(String(l.land?.utilities || '').trim())],
+    ['Permitted use', (l) => Boolean(String(l.land?.permittedUse || '').trim())],
+    ['Restrictions', (l) => Boolean(String(l.land?.restrictions || '').trim())],
+    ['Description', (l) => String(l.description || '').trim().length > 40],
+    ['Photographs', (l) => (l.images || []).length >= 1]
+  ],
+  let_: [
+    ['Monthly rent', (l) => Number(l.price) > 0],
+    ['Lease term', (l) => Boolean(String(l.let?.leaseTerm || '').trim())],
+    ['Deposit', (l) => Number(l.let?.deposit) > 0],
+    ['Utilities', (l) => Boolean(String(l.let?.utilities || '').trim())],
+    ['Pets', (l) => Boolean(String(l.let?.pets || '').trim())],
+    ['Move-in date', (l) => Boolean(String(l.let?.moveIn || '').trim())],
+    ['Bedrooms', (l) => Number(l.beds) > 0],
+    ['Bathrooms', (l) => Number(l.baths) > 0],
+    ['Description', (l) => String(l.description || '').trim().length > 40],
+    ['Photographs', (l) => (l.images || []).length >= 1]
+  ]
+};
+
+function completeness(listing) {
+  const group = isLand(listing) ? 'land' : isRent(listing) ? 'let_' : 'home';
+  const fields = TRUTH_FIELDS[group];
+  const missing = fields.filter(([, present]) => !present(listing)).map(([label]) => label);
+  return {
+    group,
+    missing,
+    have: fields.length - missing.length,
+    total: fields.length,
+    percent: Math.round(((fields.length - missing.length) / fields.length) * 100)
+  };
+}
+
+/*
+ * The one line a card can carry.
+ *
+ * A results page has to stay scannable, so the card gets the freshness and the
+ * score and nothing else - the full scope, the source and the list of missing
+ * fields are one click away. It must never print a bare "verified", for the
+ * reason given above.
+ */
+function cardTruth(listing) {
+  const { level } = confirmationState(listing);
+  const score = completeness(listing);
+  const mark = { fresh: 'check', aging: 'clock', old: 'alert', none: 'alert' }[level];
+  const title = score.missing.length ? `Not stated: ${score.missing.join(', ')}` : 'Every listed field is filled in';
+  return `
+    <p class="card-truth card-truth--${level}">
+      ${icon(mark, 'icon--sm')}<span>${escapeHtml(confirmationSentence(listing))}</span>
+      <span class="card-truth-score" title="${escapeHtml(title)}">${score.percent}% complete</span>
+    </p>`;
+}
+
+/*
+ * The full Listing Truth panel.
+ *
+ * This is the page the whole feature exists for. Everything the card compresses
+ * into one line is spelled out here, and - the part that matters - the reader can
+ * correct it. A trust promise nobody can act on is marketing; a "report a change"
+ * button that reaches the office turns the claim into a process.
+ */
+function truthPanel(listing) {
+  const truth = truthOf(listing);
+  const { level } = confirmationState(listing);
+  const score = completeness(listing);
+  const agent = agentFor(listing);
+
+  const rows = [
+    ['Status', listing.status === 'Sold' ? 'Sold - no longer available' : listing.status === 'For rent' ? 'Available to rent' : 'Available to buy'],
+    ['Last confirmed', truth.confirmedOn ? `${confirmationSentence(listing)} (${formatListed(truth.confirmedOn)})` : 'No confirmation on record'],
+    ['Information source', truth.source || 'Not recorded'],
+    ['Listed by', `${agent.name} — ${agent.role}`],
+    ['Verification scope', truth.scope.length ? truth.scope.join(' · ') : 'Nothing has been checked on record'],
+    ['Listing completeness', `${score.percent}% — ${score.have} of ${score.total} fields stated`]
+  ];
+
+  const gaps = score.missing.length
+    ? `<p class="truth-gap">${icon('alert', 'icon--sm')}Not stated: ${escapeHtml(score.missing.join(', '))}. Tell us and we will confirm it or take the listing down.</p>`
+    : '';
+
+  return `
+    <section class="detail-section truth-panel" aria-labelledby="truth-title">
+      <div class="section-head section-head--split">
+        <div>
+          <p class="eyebrow">Listing truth</p>
+          <h2 id="truth-title">What we know, and how we know it</h2>
+        </div>
+        <span class="truth-stamp truth-stamp--${level}">${icon(level === 'fresh' ? 'shield' : 'alert', 'icon--sm')}${escapeHtml(confirmationSentence(listing))}</span>
+      </div>
+
+      <dl class="truth-rows">
+        ${rows.map(([label, value]) => `
+          <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
+      </dl>
+
+      ${gaps}
+
+      <div class="truth-foot">
+        <button class="button button--ghost button--sm" type="button" data-report-change>
+          ${icon('alert', 'icon--sm')} Report a change
+        </button>
+        <p class="truth-foot-note">
+          Reported changes reach ${escapeHtml(agent.name.split(' ')[0])} directly. A stale listing is worse
+          than no listing, so we would rather correct it than defend it.
+        </p>
+      </div>
+    </section>`;
+}
+
+/*
+ * The evidence behind an asking price.
+ *
+ * Deliberately a range with its reasoning attached, never a single figure. One
+ * number reads as a measurement and gets treated as one; a range with named
+ * comparables and stated assumptions reads as an opinion, which is what it is,
+ * and can be argued with. The confidence figure is the honest part - it is
+ * driven by how many comparables there are, so an opinion built on one sale
+ * says so instead of borrowing certainty it has not earned.
+ */
+function valuationPanel(listing) {
+  const v = listing.valuation;
+  if (!v || !Number(v.low) || !Number(v.high)) return '';
+  const comps = Array.isArray(v.comps) ? v.comps.filter(Boolean) : [];
+  const assumptions = Array.isArray(v.assumptions) ? v.assumptions.filter(Boolean) : [];
+  // Confidence follows the evidence. A single comparable is a guess with one
+  // data point behind it, and printing "Medium" there would be flattering.
+  const confidence = comps.length >= 2 ? (v.confidence || 'Medium') : 'Low';
+
+  return `
+    <section class="detail-section valuation" aria-labelledby="valuation-title">
+      <p class="eyebrow">Evidence</p>
+      <h2 id="valuation-title">Our view of the value</h2>
+      <p class="valuation-range">
+        <span ${priceAttrs(v.low)}></span>
+        <span class="valuation-dash">to</span>
+        <span ${priceAttrs(v.high)}></span>
+      </p>
+      <p class="valuation-meta">
+        <span class="valuation-confidence valuation-confidence--${escapeHtml(confidence.toLowerCase())}">${escapeHtml(confidence)} confidence</span>
+        <span>Valued ${escapeHtml(formatListed(v.on))}</span>
+        <span>${comps.length} comparable${comps.length === 1 ? '' : 's'}</span>
+      </p>
+
+      ${comps.length ? `
+        <div class="valuation-block">
+          <h3>Comparable properties</h3>
+          <ul class="valuation-list">${comps.map((c) => `<li>${icon('trend', 'icon--sm')}${escapeHtml(c)}</li>`).join('')}</ul>
+        </div>` : ''}
+
+      ${assumptions.length ? `
+        <div class="valuation-block">
+          <h3>What this assumes</h3>
+          <ul class="valuation-list valuation-list--assumes">${assumptions.map((a) => `<li>${icon('check', 'icon--sm')}${escapeHtml(a)}</li>`).join('')}</ul>
+        </div>` : ''}
+
+      <p class="valuation-disclaimer">
+        ${icon('alert', 'icon--sm')}
+        This is an opinion of value for a conversation, <strong>not a formal appraisal</strong> and not an
+        offer. If you are selling, book a proper valuation with the agent — it costs nothing and no obligation.
+      </p>
+      <a class="button button--secondary" href="contact.html">Ask for a full valuation</a>
+    </section>`;
+}
+
+/*
+ * The terms of a let, as its own panel.
+ *
+ * A renter is not buying rooms; they are committing to a term, a deposit, a set
+ * of bills and a pet policy, none of which is a bedroom count. Printing them in
+ * a panel of their own is the difference between a rental listing that can be
+ * acted on and one that sends the reader to an FAQ.
+ *
+ * Only what the office has actually recorded is shown. A missing deposit prints
+ * nothing rather than "none" - "none" is a claim about someone's money.
+ */
+function tenancyPanel(listing) {
+  const lease = listing.let;
+  if (!lease) return '';
+
+  const rows = [
+    ['Lease term', lease.leaseTerm],
+    ['Move-in date', formatListed(lease.moveIn)],
+    ['Utilities', lease.utilities],
+    ['Pets', lease.pets],
+    ['Deposit', lease.deposit ? `<span ${priceAttrs(lease.deposit, ', refundable')}></span>` : '']
+  ].filter(([, value]) => value);
+
+  if (!rows.length) return '';
+
+  return `
+    <section class="detail-section tenancy" aria-labelledby="tenancy-title">
+      <p class="eyebrow">The terms</p>
+      <h2 id="tenancy-title">What you would be signing</h2>
+      <dl class="spec-grid spec-grid--tenancy">
+        ${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value.startsWith?.('<span') ? value : escapeHtml(value)}</dd></div>`).join('')}
+      </dl>
+      <p class="tenancy-note">
+        ${icon('alert', 'icon--sm')}
+        These are the terms the landlord has told us. Always read the actual
+        tenancy agreement before you commit — it is the contract, not this summary.
+      </p>
+    </section>`;
+}
+
+/*
+ * Why a price moved, and what the saving does not cover.
+ *
+ * The badge already says something is reduced; this says by how much, since when,
+ * who decided and — the line that actually protects the reader — what is not part
+ * of the discount. A reduced rent that quietly excludes the deposit is a smaller
+ * discount than the headline, and saying so is the whole difference between a
+ * promotion and a lure.
+ */
+/*
+ * Paid placement, said out loud on the listing's own page.
+ *
+ * A "Sponsored" badge on a results card is not enough on its own: the buyer who
+ * followed the link into the detail page has lost the badge, and this is exactly
+ * where they decide whether to trust what they are reading. If a placement is
+ * paid for, the page it bought has to say so.
+ *
+ * Written to sit quietly above the gallery rather than shout. It is a disclosure,
+ * not a selling point - and it explicitly separates the two things money and
+ * diligence each affect, because "we paid for this" must never be read as "so
+ * this is checked" or "and so this was not".
+ */
+function placementDisclosure(listing) {
+  if (!listing.sponsored) return '';
+  const { level } = confirmationState(listing);
+  return `
+    <p class="placement-note">
+      <span class="badge badge--sponsored">Sponsored</span>
+      <span>This position was paid for. It does not affect the checks below — this listing was
+      ${level === 'fresh' ? 'confirmed' : 'last confirmed'} on the same terms as every other one.</span>
+    </p>`;
+}
+
+function promotionNote(listing) {
+  const promo = listing.promotion;
+  if (!isHot(listing) || !promo) return '';
+  const since = promo.hotSince ? `Since ${formatListed(promo.hotSince)}. ` : '';
+  return `
+    <div class="promotion-note">
+      <p class="promotion-reason">${icon('sparkle', 'icon--sm')}${escapeHtml(since + (promo.hotReason || 'Reduced price.'))}</p>
+      ${promo.hotExcludes ? `<p class="promotion-excludes">${icon('alert', 'icon--sm')}Not included in the discount: ${escapeHtml(promo.hotExcludes)}</p>` : ''}
+    </div>`;
+}
+
+/*
+ * Whether the price has fallen, and when.
+ *
+ * Separate from the hot-deal flag on purpose: a reduction and a promotion are
+ * different events, and collapsing them would let a paid promotion masquerade as
+ * a market-driven cut. This reads only `priceHistory`.
+ */
+function priceReduced(listing) {
+  const history = Array.isArray(listing.priceHistory) ? listing.priceHistory : [];
+  const latest = history[history.length - 1];
+  if (!latest || Number(latest.from) <= 0 || Number(latest.from) <= Number(listing.price)) return null;
+  return {
+    from: Number(latest.from),
+    on: latest.on,
+    amount: Number(latest.from) - Number(listing.price),
+    percent: Math.round((1 - listing.price / Number(latest.from)) * 100)
+  };
+}
+
 /*
  * Plot size is the headline number for land, so it gets its own formatter rather
  * than reusing `lot`. That string is free text ("620 m2", "0.8 acres") and is
@@ -814,6 +1197,11 @@ function detailSpecs(listing) {
       ${access ? `<div><dt>Access</dt><dd>${escapeHtml(access)}</dd></div>` : ''}
       ${land.landmarks ? `<div><dt>Landmarks</dt><dd>${escapeHtml(land.landmarks)}</dd></div>` : ''}
       ${land.utilities ? `<div><dt>Utilities</dt><dd>${escapeHtml(land.utilities)}</dd></div>` : ''}
+      ${/* What the council permits and what the title forbids are different
+          questions, and a buyer who only sees the zoning discovers the covenant
+          after exchange. Both are printed; neither is inferred from the other. */ ''}
+      ${land.permittedUse ? `<div><dt>Permitted use</dt><dd>${escapeHtml(land.permittedUse)}</dd></div>` : ''}
+      ${land.restrictions ? `<div><dt>Restrictions</dt><dd>${escapeHtml(land.restrictions)}</dd></div>` : ''}
       <div><dt>Listed on</dt><dd>${formatListed(listing.listed)}</dd></div>
       ${common}`;
   }
@@ -844,6 +1232,12 @@ function propertyCard(listing, options = {}) {
           ${isRent(listing) ? `<span class="badge badge--accent">To rent</span>` : ''}
           ${isShortStay(listing) ? '<span class="badge badge--brand">Short stay</span>' : ''}
           ${listing.featured && !isRent(listing) ? '<span class="badge badge--solid">Featured</span>' : ''}
+          ${/* Paid placement says so, on its own badge, and never borrows the words
+              "featured" or "verified". A reader who sees money mentioned here
+              learns it bought position and nothing else - the truth fields below
+              are earned separately. */ ''}
+          ${listing.sponsored ? '<span class="badge badge--sponsored" title="This position was paid for. It does not affect the listing checks.">Sponsored</span>' : ''}
+          ${priceReduced(listing) && !isHot(listing) ? '<span class="badge badge--reduced">Price reduced</span>' : ''}
         </div>
         <button class="favorite-button" type="button" data-favorite="${listing.id}" aria-pressed="false" aria-label="Save this home">${icon('heart')}</button>
       </div>
@@ -854,6 +1248,7 @@ function propertyCard(listing, options = {}) {
         <p class="card-address">${icon('pin', 'icon--sm')}${escapeHtml(listing.address)}, ${escapeHtml(listing.city)}</p>
         <div class="card-specs">${cardSpecs(listing)}</div>
         ${shortStayNote(listing)}
+        ${cardTruth(listing)}
         ${description}
         <div class="card-footer">
           <span class="card-agent"><span class="avatar avatar--${agent.tint}">${agent.initials}</span>${escapeHtml(agent.name)}</span>
@@ -1432,7 +1827,69 @@ function initResults() {
     // promotion has run out and stops treating it as hot on its own.
     featured: (a, b) => Number(isHot(b)) - Number(isHot(a))
       || Number(b.featured) - Number(a.featured)
-      || b.listed.localeCompare(a.listed)
+      || b.listed.localeCompare(a.listed),
+
+    /*
+     * Freshness of the confirmation, not of the listing.
+     *
+     * "Newest" answers "what arrived today", which is a question about the agency.
+     * "Recently confirmed" answers "what did somebody check lately", which is the
+     * question the Listing Truth work exists for - and the two are different
+     * orderings, because a listing from March confirmed yesterday is the safest
+     * thing on the page and a listing from last Tuesday confirmed in June is not.
+     *
+     * Unconfirmed listings sink rather than sort as ancient: their date is absent
+     * rather than old, and "" sorts below every real ISO date, so they land at the
+     * bottom where they belong without needing a special case in the comparator.
+     */
+    confirmed: (a, b) => (truthOf(b).confirmedOn || '').localeCompare(truthOf(a).confirmedOn || '')
+      || b.listed.localeCompare(a.listed),
+
+    /*
+     * Price reductions, biggest first.
+     *
+     * Reduction is read from `priceHistory` and never from `originalPrice`: that
+     * field belongs to the hot-deal promotion, and reading a paid promotion as a
+     * market-driven cut would put an advert in front of somebody who specifically
+     * asked for properties whose owner has come down. Listings that were never
+     * reduced sort to the end, again because null sorts below any number.
+     */
+    reduced: (a, b) => {
+      const cut = (l) => priceReduced(l)?.amount || 0;
+      return cut(b) - cut(a) || b.listed.localeCompare(a.listed);
+    },
+
+    /*
+     * Closest match to the words typed, with a stated fallback.
+     *
+     * "Relevance" in a portal of this size is usually a black box, and a reader who
+     * cannot predict the order cannot trust it. So the scoring is simple and the
+     * tiebreak is explicit: an exact title match wins, then a word in the title,
+     * then a word anywhere else on the listing, then anything that came out of
+     * freshness. Every result that scores zero still appears - a search that
+     * silently drops the properties you did not type the name of is worse than
+     * one that shows them, because you cannot tell the difference between "no
+     * match" and "bad luck".
+     */
+    match: (a, b, state) => {
+      const q = String(state?.q || '').trim().toLowerCase();
+      if (!q) return b.listed.localeCompare(a.listed);
+      const score = (listing) => {
+        const title = String(listing.title || '').toLowerCase();
+        if (title === q) return 100;
+        if (title.includes(q)) return 60;
+        // Every word in the query has to appear somewhere, not just one of them -
+        // otherwise "harbour villa" scores a listing for containing "harbour" and
+        // calling it a match.
+        const words = q.split(/\s+/).filter(Boolean);
+        const haystack = `${title} ${listing.address} ${listing.city} ${listing.type} ${listing.land?.zoning || ''} ${listing.let?.leaseTerm || ''}`.toLowerCase();
+        const allFound = words.every((word) => haystack.includes(word));
+        if (!allFound) return 0;
+        const inTitle = words.filter((word) => title.includes(word)).length;
+        return 20 + inTitle * 8;
+      };
+      return score(b) - score(a) || (truthOf(b).confirmedOn || '').localeCompare(truthOf(a).confirmedOn || '');
+    }
   };
 
   const describeChips = (state) => {
@@ -1453,6 +1910,41 @@ function initResults() {
     }
     return chips;
   };
+
+  /*
+   * Say how these results were ordered, in a sentence, every time.
+   *
+   * A ranking nobody can inspect is a ranking nobody should trust, and the audit's
+   * point about paid placement is really a point about opacity: if a listing is
+   * first because someone paid, that is fine to say and absurd to hide, but it is
+   * only fine if the reader can also see what the *other* orders do.
+   *
+   * So this states the current rule and its tiebreak, and - the part that is easy
+   * to leave out and the part that matters - it names what is NOT driving the
+   * order. A reader told "paid placement does not affect these results" learns
+   * something; a reader told nothing learns whatever they already assumed.
+   */
+  const SORT_NOTES = {
+    featured: 'Live hot deals first, then featured listings, then newest. Sponsored placement never changes this order.',
+    newest: 'Newest listing first, by the day it came onto the books.',
+    confirmed: 'Most recently confirmed first — the date somebody last checked it was still available.',
+    reduced: 'Biggest price reduction first. Paid promotions are not counted as reductions.',
+    match: 'Best match to your search first: an exact title match, then words in the title, then anywhere on the listing.',
+    'price-asc': 'Lowest price first.',
+    'price-desc': 'Highest price first.',
+    'area-desc': 'Largest first — floor area for a house, plot size for land.'
+  };
+
+  function explainSort(state, results) {
+    const note = SORT_NOTES[state.sort] || SORT_NOTES.featured;
+    const el = $('#sort-explain');
+    if (!el) return;
+    // Only worth saying when there is something on the page to be ordered.
+    el.innerHTML = results.length
+      ? `${icon('trend', 'icon--sm')}<span><strong>How these are ordered:</strong> ${escapeHtml(note)}</span>`
+      : '';
+    el.hidden = results.length === 0;
+  }
 
   /*
    * Keep the two controls that only make sense for one category in step with the
@@ -1496,7 +1988,21 @@ function initResults() {
   function render() {
     const state = readState();
     syncCategoryControls(state);
-    const results = listings.filter((listing) => matches(listing, state)).sort(sorters[state.sort]);
+
+    /*
+     * Sort through a wrapper rather than handing the comparator straight to
+     * Array.prototype.sort.
+     *
+     * Two reasons. The "closest match" order needs the query string, and `.sort`
+     * calls a comparator with exactly two arguments - there is no third slot to
+     * pass the state through, so handing it the bare function would silently
+     * score every listing against an empty query and quietly degrade to "newest".
+     * And an unrecognised sort value from a hand-edited URL would otherwise reach
+     * `.sort(undefined)`, which leaves the array in its original order and looks
+     * like it worked. Both are caught here rather than being a mystery later.
+     */
+    const sorter = sorters[state.sort] || sorters.featured;
+    const results = listings.filter((listing) => matches(listing, state)).sort((a, b) => sorter(a, b, state));
 
     grid.innerHTML = results.slice(0, visible).map((listing) => propertyCard(listing, { withDescription: view === 'list' })).join('');
     paintPrices(grid);
@@ -1510,6 +2016,7 @@ function initResults() {
     loadMoreWrap.hidden = results.length <= visible;
 
     const chips = describeChips(state);
+    explainSort(state, results);
     chipRow.innerHTML = chips.map((chip) => `
       <span class="chip">${escapeHtml(chip.label)}
         <button type="button" data-clear="${chip.key}" aria-label="Remove ${escapeHtml(chip.label)} filter">${icon('x', 'icon--sm')}</button>
@@ -1709,6 +2216,114 @@ function hotBanner(listing) {
     </div>`;
 }
 
+/* ---- viewing desk -------------------------------------------------------- */
+/*
+ * Turning "book a viewing" from a contact form into a request somebody is
+ * actually going to keep.
+ *
+ * The audit's diagnosis is that the uncertainty is not about the house, it is
+ * about the transaction: is this still available, who is handling it, did
+ * anybody see my message, is a viewing actually going to happen. A form that
+ * says "thanks, we will be in touch" answers none of those and is the reason
+ * people ring a portal three times before trusting a single listing on it.
+ *
+ * So the request has three properties it needs:
+ *
+ *   1. It names the recipient. Not "our team" - the actual person, their role,
+ *      and how they can be reached directly.
+ *   2. It offers times rather than asking for one free-text date. Somebody who
+ *      cannot attend anything has to be able to say so without writing a
+ *      paragraph, and an agent who has to propose a time over the phone is an
+ *      agent who never confirms.
+ *   3. It comes back with a status and a reference, so "did this go anywhere?"
+ *      has an answer that is not the reader's memory.
+ */
+
+/*
+ * The slots the listing agent can actually offer.
+ *
+ * Built forward from today rather than stored, so the desk is never offering a
+ * viewing for last Tuesday. Seven days out is a working week: long enough for
+ * somebody to clear a diary, short enough that a stale listing is usually
+ * noticed by whoever holds the keys.
+ *
+ * Deliberately conservative about times. Evening slots exist because most people
+ * are at work, and a Saturday slot exists because that is when viewings actually
+ * happen - a desk offering only nine-to-five slots on weekdays is a desk that
+ * quietly loses every buyer who works.
+ */
+const VIEWING_DAYS_AHEAD = 7;
+const VIEWING_SLOT_TIMES = [
+  { value: '09:30', label: 'Morning, 9:30' },
+  { value: '12:30', label: 'Lunchtime, 12:30' },
+  { value: '16:00', label: 'Afternoon, 4:00' },
+  { value: '18:30', label: 'Early evening, 6:30' },
+  { value: '10:00', label: 'Saturday, 10:00' }
+];
+
+/** The next `count` dates on which a viewing could sensibly happen. */
+function viewingDates(count = 6) {
+  const dates = [];
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  // Not today. Somebody asking to view a house at four o'clock this afternoon
+  // needs an answer within the hour, not a diary slot.
+  cursor.setDate(cursor.getDate() + 1);
+  while (dates.length < count) {
+    const day = cursor.getDay();
+    if (day !== 0) dates.push(new Date(cursor)); // closed on Sundays
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+const isoDay = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0')
+].join('-');
+
+/** "Tomorrow" / "Thu 9 Oct" — a date label a person reads faster than an ISO one. */
+function viewingDayLabel(date) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((date - today) / 86400000);
+  if (days === 1) return 'Tomorrow';
+  if (days === 2) return 'Day after tomorrow';
+  if (days < 7) return date.toLocaleDateString('en-GB', { weekday: 'long' });
+  return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/*
+ * The response time this office commits to, and what happens when it is missed.
+ *
+ * Printed before the request is sent rather than after, because a commitment the
+ * customer only sees once it has been broken is not a commitment. The escalation
+ * line is the part that makes it real: somebody who has heard nothing is not left
+ * concluding they were forgotten, they are told there is a second address.
+ */
+function viewingPromise(agent) {
+  return {
+    response: 'within one working day',
+    escalateTo: site.email || 'hello@northwind.example',
+    agent
+  };
+}
+
+/*
+ * A reference the customer can quote, derived from the listing and the moment of
+ * the request. Not a security token and not pretending to be one - it exists so
+ * that "I enquired about the villa on Tuesday" becomes something the office can
+ * look up in a second. The clock is the only moving part, so two requests for
+ * the same listing in the same second collide; that is fine here and would not be
+ * if the reference were ever used for authentication.
+ */
+function viewingReference(listing) {
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  return `${listing.id.toUpperCase()}-${stamp}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
 /* ---- property detail ---------------------------------------------------- */
 function initDetail() {
   const root = $('#property-detail');
@@ -1740,7 +2355,9 @@ function initDetail() {
     </nav>
     <div class="detail-layout">
       <div>
+        ${placementDisclosure(listing)}
         ${hotBanner(listing)}
+        ${promotionNote(listing)}
         <div class="gallery">
           <div class="gallery-main"><img id="gallery-main-image" src="${listing.images[0]}" alt="${escapeHtml(listing.title)}" width="1200" height="750" /></div>
           <div class="gallery-thumbs" role="group" aria-label="Property photos">
@@ -1764,6 +2381,9 @@ function initDetail() {
         </div>
 
         ${ratesTable(listing)}
+        ${tenancyPanel(listing)}
+
+        ${truthPanel(listing)}
 
         <dl class="spec-grid">${detailSpecs(listing)}</dl>
 
@@ -1778,6 +2398,8 @@ function initDetail() {
             ${listing.features.map((feature) => `<li>${icon('check', 'icon--sm')}${escapeHtml(feature)}</li>`).join('')}
           </ul>
         </section>
+
+        ${valuationPanel(listing)}
       </div>
 
       <aside class="agent-card--sticky" aria-labelledby="agent-name">
@@ -1790,8 +2412,15 @@ function initDetail() {
           <a href="mailto:${agent.email}">${icon('mail', 'icon--sm')}${escapeHtml(agent.email)}</a>
           <span>${icon('home', 'icon--sm')}${agent.listings} sales on record</span>
         </div>
-        <button class="button button--primary button--block" type="button" data-viewing>Book a viewing</button>
+        <button class="button button--primary button--block" type="button" data-viewing>
+          ${icon('calendar', 'icon--sm')} Request a viewing
+        </button>
         <a class="button button--ghost button--block detail-ask" href="contact.html">Ask a question</a>
+        <p class="desk-assurance">
+          ${icon('shield', 'icon--sm')}
+          ${escapeHtml(agent.name.split(' ')[0])} replies ${escapeHtml(viewingPromise(agent).response)}.
+          Heard nothing by then? Email <a href="mailto:${escapeHtml(site.email || '')}">${escapeHtml(site.email || 'the office')}</a>.
+        </p>
       </aside>
     </div>
     <div id="similar-mount"></div>
@@ -1802,7 +2431,7 @@ function initDetail() {
         <input type="text" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" />
         <header class="dialog-header">
           <div>
-            <h2 id="viewing-title">Book a viewing</h2>
+            <h2 id="viewing-title">Request a viewing</h2>
             <p>${escapeHtml(listing.title)} · ${escapeHtml(listing.address)}</p>
           </div>
           <button class="icon-button" type="button" data-close-dialog aria-label="Close">${icon('x', 'icon--sm')}</button>
@@ -1810,19 +2439,149 @@ function initDetail() {
         <div class="form-grid">
           <label class="field"><span>Name</span><input name="name" type="text" autocomplete="name" required /></label>
           <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required /></label>
-          <label class="field"><span id="date-label">Preferred date</span><input name="date" type="date" required /></label>
-          <label class="field" id="nights-field" hidden><span>Nights</span>
+          <label class="field"><span>Phone <small>Optional</small></span><input name="phone" type="tel" autocomplete="tel" /></label>
+        </div>
+
+        <!--
+          Who is handling it.
+
+          This sits above the form rather than being discovered in an email later.
+          The audit's complaint is that nobody can find out who receives their
+          enquiry, and the cheapest possible answer is to say so before they ask.
+        -->
+        <div class="desk-recipient">
+          <span class="avatar avatar--${agent.tint}">${agent.initials}</span>
+          <div>
+            <p class="desk-recipient-name">This goes to ${escapeHtml(agent.name)}</p>
+            <p class="desk-recipient-role">${escapeHtml(agent.role)} · replies ${escapeHtml(viewingPromise(agent).response)}</p>
+          </div>
+        </div>
+
+        <!--
+          Times, chosen rather than typed.
+
+          A single date field makes the customer guess one slot and the agent spend
+          a phone call discovering it was wrong. Offering the days that are actually
+          open, and letting three be picked, turns that call into a confirmation.
+          The dates are generated from today rather than stored, so the desk can
+          never offer somebody a viewing for a day that has already passed.
+        -->
+        <fieldset class="desk-slots">
+          <legend>When suits you? <small>Pick up to three</small></legend>
+          <div class="slot-days">
+            ${viewingDates().map((date) => `
+              <div class="slot-day">
+                <p class="slot-day-label">${escapeHtml(viewingDayLabel(date))}</p>
+                <div class="slot-times">
+                  ${VIEWING_SLOT_TIMES
+                    .filter((slot) => slot.value === '10:00' ? date.getDay() === 6 : date.getDay() !== 6)
+                    .map((slot) => `
+                      <label class="slot">
+                        <input type="checkbox" name="slots" value="${isoDay(date)}T${slot.value}" />
+                        <span>${escapeHtml(slot.label.replace('Saturday, ', ''))}</span>
+                      </label>`).join('')}
+                </div>
+              </div>`).join('')}
+          </div>
+          <p class="slot-error" data-slot-error hidden></p>
+        </fieldset>
+
+        <label class="field"><span id="date-label">Anything else we should know? <small>Optional</small></span>
+          <textarea name="message" rows="2" placeholder="Access needs, questions, or other times that would work"></textarea>
+        </label>
+        <label class="field" id="nights-field" hidden><span>Nights</span>
             <select name="nights">
               ${[1, 2, 3, 4, 5, 6, 7, 14, 28, 30]
                 .map((n) => `<option value="${n}">${n}${n === 7 ? ' (a week)' : n === 28 || n === 30 ? ' (a month)' : ''}</option>`)
                 .join('')}
             </select>
           </label>
-          <label class="field"><span>Phone <small>Optional</small></span><input name="phone" type="tel" autocomplete="tel" /></label>
-        </div>
         <footer class="dialog-actions">
           <button class="button button--secondary" type="button" data-close-dialog>Cancel</button>
-          <button class="button button--primary" type="submit" id="viewing-submit">Request viewing</button>
+          <button class="button button--primary" type="submit" id="viewing-submit">Send request</button>
+        </footer>
+      </form>
+
+      <!--
+        The acknowledgement.
+
+        This is the part a contact form never does. It replaces the form with a
+        reference, a named owner, what happens next and by when, and an escalation
+        route that is offered before it is needed. "We will be in touch" becomes a
+        request number, and the reason the reader stops ringing the office three
+        times is that the office told them what to do if nobody replied.
+      -->
+      <div class="dialog-shell desk-receipt" id="viewing-receipt" hidden>
+        <header class="dialog-header">
+          <div>
+            <h2>Request sent</h2>
+            <p>${escapeHtml(listing.title)}</p>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Close">${icon('x', 'icon--sm')}</button>
+        </header>
+        <div class="receipt-body">
+          <p class="receipt-ref">Your reference <strong>${escapeHtml(viewingReference(listing))}</strong></p>
+          <ol class="receipt-steps">
+            <li class="is-done"><strong>Sent</strong><span>Your times are with ${escapeHtml(agent.name)}.</span></li>
+            <li><strong>Acknowledged</strong><span>An email lands within one working day.</span></li>
+            <li><strong>Time agreed</strong><span>${escapeHtml(agent.name.split(' ')[0])} confirms one of your times or suggests another.</span></li>
+            <li><strong>Viewing</strong><span>You get the address and a reminder the day before.</span></li>
+          </ol>
+          <p class="receipt-escalate">
+            ${icon('alert', 'icon--sm')} No reply by the end of one working day? Quote the reference to
+            <a href="mailto:${escapeHtml(site.email || '')}">${escapeHtml(site.email || 'the office')}</a> and it goes to somebody else.
+          </p>
+          <p class="receipt-actions">
+            <a class="button button--secondary button--sm" href="tel:${agent.phone.replace(/[^+\d]/g, '')}">Call ${escapeHtml(agent.name.split(' ')[0])}</a>
+            <button class="button button--ghost button--sm" type="button" data-close-dialog>Back to the listing</button>
+          </p>
+        </div>
+      </div>
+    </dialog>
+
+    <!--
+      Report a change.
+
+      Separate from the viewing dialog on purpose: a correction is not an enquiry
+      and must never be filed as one, or the office treats "this has sold" as a
+      viewing request and the listing stays up for another fortnight. It posts as
+      its own kind, tagged with the listing, and the agent is told.
+    -->
+    <dialog class="dialog" id="report-dialog" aria-labelledby="report-title">
+      <form class="dialog-shell" id="report-form">
+        <input type="text" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" />
+        <header class="dialog-header">
+          <div>
+            <h2 id="report-title">Report a change</h2>
+            <p>${escapeHtml(listing.title)} · ${escapeHtml(listing.address)}</p>
+          </div>
+          <button class="icon-button" type="button" data-report-close aria-label="Close">${icon('x', 'icon--sm')}</button>
+        </header>
+        <p class="report-intro">
+          Every listing on this site carries a last-confirmed date. If that is wrong,
+          tell us and we will check it or take the listing down. Nobody is penalised
+          for a listing going stale.
+        </p>
+        <div class="form-grid">
+          <label class="field field--full"><span>What has changed?</span>
+            <select name="change" required>
+              <option value="">Choose one…</option>
+              <option value="no-longer-available">It has sold, let or been withdrawn</option>
+              <option value="price-changed">The price is wrong</option>
+              <option value="details-wrong">A detail is wrong</option>
+              <option value="not-available-here">Nobody is answering the number</option>
+            </select>
+          </label>
+          <label class="field field--full"><span>Anything else? <small>Optional</small></span>
+            <textarea name="detail" rows="3" placeholder="What you saw, and roughly when"></textarea>
+          </label>
+          <label class="field field--full"><span>Your email <small>Optional, for a reply</small></span>
+            <input name="email" type="email" autocomplete="email" />
+          </label>
+        </div>
+        <footer class="dialog-actions">
+          <button class="button button--secondary" type="button" data-report-close>Cancel</button>
+          <button class="button button--primary" type="submit">Send to the office</button>
         </footer>
       </form>
     </dialog>`;
@@ -1880,21 +2639,47 @@ function initDetail() {
   const dialog = $('#viewing-dialog', root);
   const nightsField = $('#nights-field', root);
   const nightsControl = $('select[name="nights"]', root);
+  const form = $('#viewing-form', root);
+  const receipt = $('#viewing-receipt', root);
+  const slotError = $('[data-slot-error]', root);
   let dialogIntent = 'viewing';
+
+  /*
+   * Three times, no more.
+   *
+   * More than three and the request stops being a request - an agent cannot
+   * propose a time out of eight, and a customer offering eight times is usually a
+   * customer who will not get any of them. Three is enough to cover a week.
+   */
+  const MAX_SLOTS = 3;
+
+  const showSlotError = (message) => {
+    if (!slotError) return;
+    slotError.textContent = message;
+    slotError.hidden = !message;
+  };
 
   const openDialog = (intent) => {
     dialogIntent = intent;
     const availability = intent === 'availability';
-    $('#viewing-title', root).textContent = availability ? 'Check availability' : 'Book a viewing';
-    $('#date-label', root).textContent = availability ? 'Arrival date' : 'Preferred date';
-    $('#viewing-submit', root).textContent = availability ? 'Request availability' : 'Request viewing';
+    $('#viewing-title', root).textContent = availability ? 'Check availability' : 'Request a viewing';
+    $('#viewing-submit', root).textContent = availability ? 'Request availability' : 'Send request';
+    // A short stay is not booked by choosing a viewing slot - the guest wants to
+    // know whether the nights are free. So the slot grid is for real viewings
+    // only, and the availability path falls back to the arrival-date question.
+    const slotField = $('.desk-slots', root);
+    if (slotField) slotField.hidden = availability;
     nightsField.hidden = !availability;
     // Defaulted to the shortest booking the listing actually accepts, so the
     // form cannot be submitted asking for a stay the owner will refuse.
     if (availability && nightsControl) nightsControl.value = String(minNights(listing));
+    // Coming back to the dialog after a receipt should show the form again.
+    form.hidden = false;
+    receipt.hidden = true;
+    showSlotError('');
     dialog.showModal();
     document.body.classList.add('dialog-open');
-    $('#viewing-form input[name="name"]', root).focus();
+    $('input[name="name"]', form).focus();
   };
 
   $('[data-viewing]', root).addEventListener('click', () => openDialog('viewing'));
@@ -1902,14 +2687,37 @@ function initDetail() {
   $$('[data-close-dialog]', root).forEach((button) => button.addEventListener('click', () => dialog.close()));
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
   dialog.addEventListener('close', () => document.body.classList.remove('dialog-open'));
-  $('#viewing-form', root).addEventListener('submit', async (event) => {
+  // Enforcing the cap in the handler rather than in the markup: a checkbox with
+  // a `max` attribute silently stops being clickable and looks broken, whereas
+  // letting the customer tick a fourth and then telling them why is clearer.
+  $$('input[name="slots"]', root).forEach((box) => box.addEventListener('change', () => {
+    const chosen = $$('input[name="slots"]:checked', root);
+    if (chosen.length <= MAX_SLOTS) {
+      showSlotError('');
+      return;
+    }
+    box.checked = false;
+    showSlotError(`Please pick up to ${MAX_SLOTS} times — more than that and somebody has to call you back to choose.`);
+  }));
+
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const form = event.currentTarget;
     const fields = new FormData(form);
+    const availability = dialogIntent === 'availability';
+    const slots = fields.getAll('slots').map(String);
+
+    // A viewing with no time on it is the old form in a new costume: the agent
+    // still has to phone to arrange it. Said plainly rather than submitted and
+    // quietly dropped on a floor somewhere.
+    if (!availability && !slots.length) {
+      showSlotError('Pick at least one time that suits you, so we can confirm a viewing rather than ring you back.');
+      $('.desk-slots', root)?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+
     const submit = lockSubmit(form);
 
     try {
-      const availability = dialogIntent === 'availability';
       await postEnquiry({
         // The agent inbox files these separately, and an availability enquiry that
         // arrives labelled "booking" is one somebody has to read twice to work out.
@@ -1917,16 +2725,39 @@ function initDetail() {
         name: fields.get('name'),
         email: fields.get('email'),
         phone: fields.get('phone'),
-        date: fields.get('date'),
+        message: fields.get('message'),
+        // The chosen slots, and a human-readable copy of them. The structured
+        // value is what an agent triages against a diary; the prose is what they
+        // read in the inbox list. Sending only one of the two makes somebody
+        // reconstruct it.
+        slots,
+        timesWanted: slots.map((slot) => slot.replace('T', ', ')).join(' · '),
         nights: availability ? fields.get('nights') : null,
         listingId: listing.id,
-        listingTitle: listing.title
+        listingTitle: listing.title,
+        // Who was named to the customer as the recipient. Without this the office
+        // cannot tell whether a booking went to the agent who promised to handle
+        // it, and the promise the website made cannot be checked afterwards.
+        agentId: listing.agentId,
+        agentName: agent.name,
+        reference: viewingReference(listing)
       }, form);
       form.reset();
-      dialog.close();
-      announce(availability
-        ? `Availability request sent for ${listing.title}`
-        : `Viewing request sent for ${listing.title}`);
+      showSlotError('');
+
+      if (availability) {
+        dialog.close();
+        announce(`Availability request sent for ${listing.title}`);
+        return;
+      }
+
+      // The receipt replaces the form rather than closing the dialog, so the
+      // reader gets the reference and the next steps while the listing is still
+      // behind them and they can act on it.
+      form.hidden = true;
+      receipt.hidden = false;
+      $('[data-close-dialog]', receipt)?.focus();
+      announce(`Viewing request sent — reference ${viewingReference(listing)}`);
     } catch (problem) {
       announce(problem.message);
     } finally {
@@ -1934,7 +2765,57 @@ function initDetail() {
     }
   });
 
-  syncFavoriteButtons();
+  /*
+ * Report a change.
+ *
+ * The Listing Truth panel makes a claim, and a claim the reader cannot challenge
+ * is decoration. This is the escape valve: it files the correction into the same
+ * inbox as everything else, tagged against the listing, so the office hears from
+ * the person most likely to know that a listing is stale.
+ *
+ * Deliberately one click plus a sentence. A form that insists on a category, a
+ * severity and a photograph before it will accept "this has sold" is a form
+ * nobody completes.
+ */
+const reportDialog = $('#report-dialog', root);
+if (reportDialog) {
+  const reportForm = $('#report-form', root);
+  const openReport = () => {
+    reportDialog.showModal();
+    document.body.classList.add('dialog-open');
+    $('select[name="change"]', reportForm).focus();
+  };
+  $('[data-report-change]', root)?.addEventListener('click', openReport);
+  $$('[data-report-close]', root).forEach((button) => button.addEventListener('click', () => reportDialog.close()));
+  reportDialog.addEventListener('click', (event) => { if (event.target === reportDialog) reportDialog.close(); });
+  reportDialog.addEventListener('close', () => document.body.classList.remove('dialog-open'));
+
+  reportForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const fields = new FormData(reportForm);
+    const submit = lockSubmit(reportForm);
+    try {
+      await postEnquiry({
+        kind: 'correction',
+        intent: fields.get('change'),
+        detail: `${listing.title} (${listing.id})`,
+        message: fields.get('detail'),
+        email: fields.get('email') || undefined,
+        listingId: listing.id,
+        listingTitle: listing.title
+      }, reportForm);
+      reportForm.reset();
+      reportDialog.close();
+      announce('Thank you — that goes straight to the agent handling this listing.');
+    } catch (problem) {
+      announce(problem.message);
+    } finally {
+      submit.done();
+    }
+  });
+}
+
+syncFavoriteButtons();
 }
 
 /* ---- enquiries ----------------------------------------------------------- */

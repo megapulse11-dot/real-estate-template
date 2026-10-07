@@ -65,6 +65,33 @@
             <button class="btn btn--secondary" id="enquiries-archive-read" type="button">Archive read</button>
             <button class="btn btn--secondary" id="enquiries-refresh" type="button">Refresh</button>
           </div>
+
+          <!--
+            The viewing desk, measured.
+
+            The site promises a named agent, a reference and an escalation route on
+            every viewing request. These are the numbers that make the promise
+            checkable, and they are computed from the enquiries themselves so they
+            cannot drift from the inbox below. Hidden until there is at least one
+            viewing request, because a row of zeroes is not a metric.
+          -->
+          <div id="desk-metrics" class="metrics" hidden>
+            <h3 class="metrics__title">Viewing desk</h3>
+            <!--
+              The cards and the per-agent table are written to separately.
+              renderDeskMetrics replaces this grid wholesale, so the table has to
+              live outside it or the first render would delete the element the
+              second render is trying to fill.
+            -->
+            <div class="metrics__grid" id="desk-metrics-cards"></div>
+            <table class="table-card metrics__table" id="desk-metrics-table" hidden>
+              <caption class="sr-only">Viewing requests by agent</caption>
+              <thead>
+                <tr><th>Agent</th><th>Requests</th><th>Opened</th><th>Median response</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
           <div class="toolbar">
             <input id="enquiry-search" type="search" placeholder="Search name, email, listing or text" aria-label="Search enquiries" />
             <select id="enquiry-kind" aria-label="Filter by type">

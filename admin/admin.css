@@ -86,6 +86,29 @@ main { padding: 26px 24px 60px; }
 .toolbar input, .toolbar select { padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
 .toolbar input { min-width: 240px; }
 
+/* viewing desk metrics */
+/* Six small figures above the enquiries list. The point is that a promise made to
+   a customer in an agent's name is a number somebody can be held to, so the
+   values are deliberately plain and the note under each one says what it was
+   drawn from. The tone is only ever `good`/`warn`/`bad` and never decorative:
+   colour here would be an opinion about the office, which is the opposite of
+   what a metric should be. */
+.metrics { margin-bottom: 20px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.metrics__title { margin: 0 0 14px; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+.metrics__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.metric { padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; }
+.metric__label { margin: 0; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.metric__value { margin: 5px 0 3px; font-size: 24px; font-weight: 700; letter-spacing: -.6px; }
+.metric__note { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.metric--good { border-color: #bcd9cf; background: var(--brand-soft); }
+.metric--warn { border-color: #e6d3b8; background: #fdf6ec; }
+.metric--bad { border-color: #edc9c4; background: var(--danger-soft); }
+.metric--bad .metric__value { color: var(--danger); }
+.metrics__table { margin-top: 14px; }
+.metrics__table th { padding: 9px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; letter-spacing: .4px; }
+.metrics__table td { padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.metrics__table tr:last-child td { border-bottom: 0; }
+
 /* cards (agents / offices) */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .entity { display: flex; flex-direction: column; gap: 10px; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
